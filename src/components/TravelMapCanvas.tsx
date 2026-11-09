@@ -405,19 +405,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = ({
             />
           )}
 
-          {/* Subtle Graticule Grid */}
-          {showGraticule && graticulePath && (
-            <path
-              d={graticulePath}
-              fill="none"
-              stroke="#1e293b"
-              strokeOpacity={0.45}
-              strokeWidth={0.5}
-              vectorEffect="non-scaling-stroke"
-              data-bg="true"
-            />
-          )}
-
           {/* Country Polygons (Memoized with non-scaling-stroke so 0 paths re-render during zoom/pan) */}
           {useMemo(
             () => (
@@ -507,6 +494,19 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = ({
                 </g>
               ) : null,
             [activeAdmin1FeatureIds, admin1Paths, showAdmin1, visitedAdmin1FeatureIds]
+          )}
+
+          {/* Graticule Grid (Rendered above land/admin1 polygons so lat/lon lines remain visible across continents) */}
+          {showGraticule && graticulePath && (
+            <path
+              d={graticulePath}
+              fill="none"
+              stroke="#38bdf8"
+              strokeOpacity={0.28}
+              strokeWidth={0.75}
+              vectorEffect="non-scaling-stroke"
+              className="graticule-layer pointer-events-none"
+            />
           )}
 
           {/* Directional Straight Transit Lines Layer */}

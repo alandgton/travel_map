@@ -12,7 +12,7 @@ import { useResolvedCities } from './hooks/useResolvedCities';
 import { computeAllCityStats, computeJourneySummary } from './utils/itineraryStats';
 import { CityDetailDrawer } from './components/CityDetailDrawer';
 import { RegionSelectorBar } from './components/RegionSelectorBar';
-import { TimelineScrubber } from './components/TimelineScrubber';
+import { JourneyPlayback } from './components/JourneyPlayback';
 import { TransitLegendBar } from './components/TransitLegendBar';
 import { TravelMapCanvas } from './components/TravelMapCanvas';
 
@@ -65,12 +65,12 @@ export const App: React.FC = () => {
   const [selectedLegId, setSelectedLegId] = useState<number | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState<boolean>(false);
 
-  // Opt-In Chronological Timeline Scrubber State
+  // Opt-In Journey Playback State
   const [isTimelineEnabled, setIsTimelineEnabled] = useState<boolean>(false);
   const [isPlayingTimeline, setIsPlayingTimeline] = useState<boolean>(false);
   // Section 4 requirement: Follow Toggle (autoFollowCamera) is enabled (true) by default
   const [autoFollowCamera, setAutoFollowCamera] = useState<boolean>(true);
-  const [showFutureLegsInTimeline, setShowFutureLegsInTimeline] = useState<boolean>(true);
+  const [showFutureLegsInTimeline, setShowFutureLegsInTimeline] = useState<boolean>(false);
   const [currentTimelineIndex, setCurrentTimelineIndex] = useState<number>(0);
   const [playbackSpeedMs, setPlaybackSpeedMs] = useState<number>(1400);
 
@@ -334,7 +334,7 @@ export const App: React.FC = () => {
         )}
       </main>
 
-      {/* Bottom HUD: Transit Legend + Opt-In Chronological Timeline Scrubber */}
+      {/* Bottom HUD: Transit Legend + Opt-In Journey Playback */}
       <footer className="pointer-events-none absolute bottom-0 left-0 right-0 z-20 flex flex-col items-center gap-2 p-3 sm:p-4">
         <div className="flex w-full max-w-5xl flex-col items-center gap-2">
           <div className="flex flex-wrap items-center justify-center gap-2">
@@ -364,7 +364,7 @@ export const App: React.FC = () => {
             </div>
           </div>
 
-          <TimelineScrubber
+          <JourneyPlayback
             isEnabled={isTimelineEnabled}
             isPlaying={isPlayingTimeline}
             autoFollowCamera={autoFollowCamera}

@@ -31,4 +31,4 @@ npm run build
 - `src/utils/itineraryStats.ts` — Per-city stay aggregation (`computeAllCityStats`) and trip summary calculator (`computeJourneySummary`).
 - `src/hooks/useMapTopology.ts` — Fetches & caches adaptive LOD (`50m` below `6x` zoom, `10m` high-res at `>= 6x` zoom) country polygons and optional Admin-1 state/province boundaries.
 - `src/hooks/useMapCamera.ts` — Manages `d3-zoom` physics (`1x–250x`), direct DOM `<g>` transforms for `60–120fps` mobile pan/zoom, responsive mobile label/pin scaling, and two-stage `invScale`.
-- `src/components/` — Declarative SVG map (`TravelMapCanvas`), regional camera bar (`RegionSelectorBar`), transit legend (`TransitLegendBar`), opt-in chronological scrubber (`TimelineScrubber`), and responsive city/leg detail drawer (`CityDetailDrawer`).
+- `src/components/` — Declarative SVG map (`TravelMapCanvas`), regional camera bar (`RegionSelectorBar`), transit legend (`TransitLegendBar`), opt-in journey playback (`JourneyPlayback`), and responsive city/leg detail drawer (`CityDetailDrawer`).

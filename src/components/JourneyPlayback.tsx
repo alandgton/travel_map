@@ -16,7 +16,7 @@ import {
   TransitModeStyleConfig,
 } from '../config/types';
 
-interface TimelineScrubberProps {
+interface JourneyPlaybackProps {
   isEnabled: boolean;
   isPlaying: boolean;
   autoFollowCamera: boolean;
@@ -38,7 +38,7 @@ interface TimelineScrubberProps {
   onInspectCity: (cityId: string) => void;
 }
 
-export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
+export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
   isEnabled,
   isPlaying,
   autoFollowCamera,
@@ -76,7 +76,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
             onChange={(e) => onToggleEnabled(e.target.checked)}
             className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/40 cursor-pointer accent-sky-500"
           />
-          <span>Enable Chronological Timeline Scrubber</span>
+          <span>Journey Playback</span>
           {!isEnabled && (
             <span className="hidden sm:inline rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-400">
               All {totalLegs} legs visible
@@ -88,7 +88,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
           <div className="flex flex-wrap items-center gap-3 text-xs">
             {/* Follow Camera Checkbox (Enabled by default per prompt.md Section 4) */}
             <label
-              title="Smoothly pan and zoom the camera to each destination city as the timeline advances"
+              title="Smoothly pan and zoom the camera to each destination city as playback advances"
               className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-300 select-none"
             >
               <input
@@ -141,7 +141,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
         )}
       </div>
 
-      {/* Expanded Chronological Scrubber Controls when Opt-In Checkbox is Checked */}
+      {/* Expanded Journey Playback Controls when Opt-In Checkbox is Checked */}
       {isEnabled && currentLeg && (
         <div className="mt-2.5 border-t border-slate-800/90 pt-2.5 flex flex-col gap-2">
           {/* Active Leg Metadata Banner */}
@@ -219,7 +219,7 @@ export const TimelineScrubber: React.FC<TimelineScrubberProps> = ({
               <button
                 type="button"
                 onClick={onTogglePlay}
-                title={isPlaying ? 'Pause Timeline' : 'Play Timeline'}
+                title={isPlaying ? 'Pause Journey' : 'Play Journey'}
                 className="flex items-center gap-1 rounded-lg bg-sky-500 hover:bg-sky-400 px-3 py-1.5 text-xs font-semibold text-slate-950 shadow-sm shadow-sky-500/30 transition"
               >
                 {isPlaying ? (

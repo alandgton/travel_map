@@ -327,7 +327,7 @@ export const CityDetailDrawer: React.FC<CityDetailDrawerProps> = ({
                             }}
                             className="text-sky-400 hover:text-sky-300 font-sans text-[11px]"
                           >
-                            Timeline →
+                            Playback →
                           </button>
                         </div>
                       </div>
@@ -411,7 +411,7 @@ export const CityDetailDrawer: React.FC<CityDetailDrawerProps> = ({
                             }}
                             className="text-sky-400 hover:text-sky-300 font-sans text-[11px]"
                           >
-                            Timeline →
+                            Playback →
                           </button>
                         </div>
                       </div>
