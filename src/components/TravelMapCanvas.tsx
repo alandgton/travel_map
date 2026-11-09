@@ -60,7 +60,7 @@ interface HoverTooltipState {
   leg?: ItineraryLegConfig;
 }
 
-export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = ({
+export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
   svgRef,
   cameraGroupRef,
   projection,
@@ -510,423 +510,492 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = ({
           )}
 
           {/* Directional Straight Transit Lines Layer */}
-          <g className="transit-lines-layer">
-            {computedLines.map(({ leg, index, line }) => {
-              if (!visibleModes[leg.transport]) return null;
+          {useMemo(
+            () => (
+              <g className="transit-lines-layer">
+                {computedLines.map(({ leg, index, line }) => {
+                  if (!visibleModes[leg.transport]) return null;
 
-              const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
-              const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
-              const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
+                  const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
+                  const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
+                  const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
 
-              if (isFutureTimeline && !showFutureLegsInTimeline) {
-                return null;
-              }
+                  if (isFutureTimeline && !showFutureLegsInTimeline) {
+                    return null;
+                  }
 
-              const modeStyle = transitModes[leg.transport];
-              const isSelectedLeg = selectedLegId === leg.id || isCurrentTimeline;
-              const isConnectedToSelectedCity =
-                selectedCityId !== null &&
-                (leg.source === selectedCityId || leg.dest === selectedCityId);
+                  const modeStyle = transitModes[leg.transport];
+                  const isSelectedLeg = selectedLegId === leg.id || isCurrentTimeline;
+                  const isConnectedToSelectedCity =
+                    selectedCityId !== null &&
+                    (leg.source === selectedCityId || leg.dest === selectedCityId);
 
-              // Compute opacity based on selection / timeline state
-              let strokeOpacity = 0.84;
-              if (isTimelineEnabled) {
-                if (isCurrentTimeline) strokeOpacity = 1;
-                else if (isPastTimeline) strokeOpacity = 0.72;
-                else if (isFutureTimeline) strokeOpacity = 0.16;
-              } else if (selectedLegId !== null) {
-                strokeOpacity = isSelectedLeg ? 1 : 0.25;
-              } else if (selectedCityId !== null) {
-                strokeOpacity = isConnectedToSelectedCity ? 0.96 : 0.22;
-              }
+                  // Compute opacity based on selection / timeline state
+                  let strokeOpacity = 0.84;
+                  if (isTimelineEnabled) {
+                    if (isCurrentTimeline) strokeOpacity = 1;
+                    else if (isPastTimeline) strokeOpacity = 0.72;
+                    else if (isFutureTimeline) strokeOpacity = 0.16;
+                  } else if (selectedLegId !== null) {
+                    strokeOpacity = isSelectedLeg ? 1 : 0.25;
+                  } else if (selectedCityId !== null) {
+                    strokeOpacity = isConnectedToSelectedCity ? 0.96 : 0.22;
+                  }
 
-              const strokeMultiplier = isSelectedLeg
-                ? 1.55
-                : isConnectedToSelectedCity
-                  ? 1.25
-                  : 1.0;
+                  const strokeMultiplier = isSelectedLeg
+                    ? 1.55
+                    : isConnectedToSelectedCity
+                      ? 1.25
+                      : 1.0;
 
-              const strokeWidth = modeStyle.baseStrokeWidth * strokeMultiplier * invScale;
-              const scaledDash = scaleStrokeDasharray(modeStyle.strokeDasharray, invScale);
+                  const strokeWidth = modeStyle.baseStrokeWidth * strokeMultiplier * invScale;
+                  const scaledDash = scaleStrokeDasharray(modeStyle.strokeDasharray, invScale);
 
-              return (
-                <g
-                  key={leg.id}
-                  className="cursor-pointer group"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectLeg(leg);
-                  }}
-                  onMouseEnter={(e) => {
-                    const rect = svgRef.current?.getBoundingClientRect();
-                    if (rect) {
-                      setHoverInfo({
-                        type: 'leg',
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top,
-                        leg,
-                      });
-                    }
-                  }}
-                  onMouseMove={(e) => {
-                    const rect = svgRef.current?.getBoundingClientRect();
-                    if (rect) {
-                      setHoverInfo({
-                        type: 'leg',
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top,
-                        leg,
-                      });
-                    }
-                  }}
-                  onMouseLeave={() => setHoverInfo(null)}
-                >
-                  {/* Invisible wider hit-target path for easy clicking */}
-                  <path
-                    d={line.pathData}
-                    fill="none"
-                    stroke="transparent"
-                    strokeWidth={10 * invScale}
-                  />
-
-                  {/* Subtle outer glow for active or selected leg */}
-                  {(isSelectedLeg || isConnectedToSelectedCity) && (
-                    <path
-                      d={line.pathData}
-                      fill="none"
-                      stroke={modeStyle.color}
-                      strokeWidth={strokeWidth * 2.4}
-                      strokeOpacity={0.22}
-                      strokeLinecap="round"
-                    />
-                  )}
-
-                  {/* Primary Directional Straight Line Path */}
-                  <path
-                    d={line.pathData}
-                    fill="none"
-                    stroke={modeStyle.color}
-                    strokeWidth={strokeWidth}
-                    strokeDasharray={scaledDash}
-                    strokeOpacity={strokeOpacity}
-                    strokeLinecap="round"
-                  />
-                </g>
-              );
-            })}
-          </g>
-
-          {/* City Pins Layer */}
-          <g className="cities-layer">
-            {Object.values(projectedCities).map(({ city, x, y }) => {
-              const stats = cityStats[city.id];
-              const totalNights = stats?.totalNights ?? 0;
-
-              const isSelected = selectedCityId === city.id;
-              const isHomeCity = city.id === homeCityId;
-              const isTimelineActiveDest = activeTimelineLeg?.dest === city.id;
-              const isTimelineActiveSource = activeTimelineLeg?.source === city.id;
-              const isVisitedInTimeline = visitedCitiesInTimeline
-                ? visitedCitiesInTimeline.has(city.id)
-                : true;
-
-              const isConnectedToSelectedCity =
-                selectedCityId !== null &&
-                itinerary.some(
-                  (l) =>
-                    (l.source === selectedCityId && l.dest === city.id) ||
-                    (l.dest === selectedCityId && l.source === city.id)
-                );
-
-              // Base pin radius scales slightly with total nights stayed + zoom-invariant invScale
-              const nightBonus =
-                totalNights === 0 ? -0.4 : Math.min(2.0, Math.sqrt(totalNights) * 0.38);
-              const baseRadius = (2.8 + nightBonus) * invScale;
-              const radius =
-                isSelected || isTimelineActiveDest
-                  ? baseRadius * 1.35
-                  : isHomeCity
-                    ? baseRadius * 1.25
-                    : isTimelineActiveSource || isConnectedToSelectedCity
-                      ? baseRadius * 1.15
-                      : baseRadius;
-
-              const pinOpacity =
-                isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
-                  ? 0.22
-                  : selectedCityId &&
-                      !isSelected &&
-                      !isConnectedToSelectedCity &&
-                      !isTimelineActiveDest
-                    ? 0.45
-                    : 1;
-
-              return (
-                <g
-                  key={city.id}
-                  transform={`translate(${x}, ${y})`}
-                  className="cursor-pointer"
-                  style={{ opacity: pinOpacity }}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onSelectCity(city.id);
-                  }}
-                  onMouseEnter={(e) => {
-                    const rect = svgRef.current?.getBoundingClientRect();
-                    if (rect) {
-                      setHoverInfo({
-                        type: 'city',
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top,
-                        cityId: city.id,
-                      });
-                    }
-                  }}
-                  onMouseMove={(e) => {
-                    const rect = svgRef.current?.getBoundingClientRect();
-                    if (rect) {
-                      setHoverInfo({
-                        type: 'city',
-                        x: e.clientX - rect.left,
-                        y: e.clientY - rect.top,
-                        cityId: city.id,
-                      });
-                    }
-                  }}
-                  onMouseLeave={() => setHoverInfo(null)}
-                >
-                  {/* Invisible hit circle for easy clicking */}
-                  <circle r={Math.max(8 * invScale, radius * 2.2)} fill="transparent" />
-
-                  {/* Gold/Amber Home Base Ring for NYC */}
-                  {isHomeCity && (
-                    <>
-                      <circle
-                        r={radius * 2.15}
-                        fill="#f59e0b"
-                        fillOpacity={0.18}
-                        stroke="#fbbf24"
-                        strokeWidth={1.0 * invScale}
-                        strokeOpacity={0.85}
-                      />
-                    </>
-                  )}
-
-                  {/* Pulse ring for selected city or active timeline destination */}
-                  {(isSelected || isTimelineActiveDest) && (
-                    <>
-                      <circle
-                        r={radius * 2.4}
-                        fill="none"
-                        stroke={isTimelineActiveDest ? '#38bdf8' : '#f8fafc'}
-                        strokeWidth={1.1 * invScale}
-                        strokeOpacity={0.55}
-                      />
-                      <circle
-                        r={radius * 1.65}
-                        fill={isTimelineActiveDest ? '#38bdf8' : '#38bdf8'}
-                        fillOpacity={0.22}
-                      />
-                    </>
-                  )}
-
-                  {/* Outer dark halo for contrast against transit lines */}
-                  <circle
-                    r={radius + 0.75 * invScale}
-                    fill="#060913"
-                    fillOpacity={0.88}
-                  />
-
-                  {/* Main City Pin Circle */}
-                  <circle
-                    r={radius}
-                    fill={
-                      isSelected
-                        ? '#38bdf8'
-                        : isTimelineActiveDest
-                          ? '#22d3ee'
-                          : isHomeCity
-                            ? '#fbbf24'
-                            : isTimelineActiveSource
-                              ? '#fbbf24'
-                              : totalNights === 0
-                                ? '#fda4af'
-                                : '#f8fafc'
-                    }
-                    stroke="#0f172a"
-                    strokeWidth={0.75 * invScale}
-                  />
-
-                  {/* Inner dot for major multi-night hubs or Home Base */}
-                  {(totalNights >= 4 || isHomeCity) && (
-                    <circle
-                      r={radius * 0.38}
-                      fill="#0f172a"
-                      pointerEvents="none"
-                    />
-                  )}
-
-                  {/* Raised Home Flag Icon on the Home Base Pin (NYC) */}
-                  {isHomeCity && (
-                    <g className="pointer-events-none">
-                      {/* Flagpole rising from top of pin */}
-                      <line
-                        x1={0}
-                        y1={-radius * 0.4}
-                        x2={0}
-                        y2={-radius - 10.5 * invScale}
-                        stroke="#060913"
-                        strokeWidth={2.5 * invScale}
-                        strokeLinecap="round"
-                      />
-                      <line
-                        x1={0}
-                        y1={-radius * 0.4}
-                        x2={0}
-                        y2={-radius - 10.5 * invScale}
-                        stroke="#fef08a"
-                        strokeWidth={1.3 * invScale}
-                        strokeLinecap="round"
-                      />
-                      {/* Waving Pennant Flag */}
+                  return (
+                    <g
+                      key={leg.id}
+                      className="cursor-pointer group"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectLeg(leg);
+                      }}
+                      onMouseEnter={(e) => {
+                        const rect = svgRef.current?.getBoundingClientRect();
+                        if (rect) {
+                          setHoverInfo({
+                            type: 'leg',
+                            x: e.clientX - rect.left,
+                            y: e.clientY - rect.top,
+                            leg,
+                          });
+                        }
+                      }}
+                      onMouseMove={(e) => {
+                        const rect = svgRef.current?.getBoundingClientRect();
+                        if (rect) {
+                          setHoverInfo({
+                            type: 'leg',
+                            x: e.clientX - rect.left,
+                            y: e.clientY - rect.top,
+                            leg,
+                          });
+                        }
+                      }}
+                      onMouseLeave={() => setHoverInfo(null)}
+                    >
+                      {/* Invisible wider hit-target path for easy clicking */}
                       <path
-                        d={`M 0 ${(-radius - 10.5 * invScale).toFixed(3)} L ${(7.8 * invScale).toFixed(3)} ${(-radius - 7.8 * invScale).toFixed(3)} L 0 ${(-radius - 5.0 * invScale).toFixed(3)} Z`}
-                        fill="#f59e0b"
-                        stroke="#060913"
-                        strokeWidth={0.9 * invScale}
-                        strokeLinejoin="round"
+                        d={line.pathData}
+                        fill="none"
+                        stroke="transparent"
+                        strokeWidth={10 * invScale}
+                      />
+
+                      {/* Subtle outer glow for active or selected leg */}
+                      {(isSelectedLeg || isConnectedToSelectedCity) && (
+                        <path
+                          d={line.pathData}
+                          fill="none"
+                          stroke={modeStyle.color}
+                          strokeWidth={strokeWidth * 2.4}
+                          strokeOpacity={0.22}
+                          strokeLinecap="round"
+                        />
+                      )}
+
+                      {/* Primary Directional Straight Line Path */}
+                      <path
+                        d={line.pathData}
+                        fill="none"
+                        stroke={modeStyle.color}
+                        strokeWidth={strokeWidth}
+                        strokeDasharray={scaledDash}
+                        strokeOpacity={strokeOpacity}
+                        strokeLinecap="round"
                       />
                     </g>
-                  )}
-                </g>
-              );
-            })}
-          </g>
+                  );
+                })}
+              </g>
+            ),
+            [
+              computedLines,
+              currentTimelineLegIndex,
+              invScale,
+              isTimelineEnabled,
+              onSelectLeg,
+              selectedCityId,
+              selectedLegId,
+              showFutureLegsInTimeline,
+              svgRef,
+              transitModes,
+              visibleModes,
+            ]
+          )}
+
+          {/* City Pins Layer */}
+          {useMemo(
+            () => (
+              <g className="cities-layer">
+                {Object.values(projectedCities).map(({ city, x, y }) => {
+                  const stats = cityStats[city.id];
+                  const totalNights = stats?.totalNights ?? 0;
+
+                  const isSelected = selectedCityId === city.id;
+                  const isHomeCity = city.id === homeCityId;
+                  const isTimelineActiveDest = activeTimelineLeg?.dest === city.id;
+                  const isTimelineActiveSource = activeTimelineLeg?.source === city.id;
+                  const isVisitedInTimeline = visitedCitiesInTimeline
+                    ? visitedCitiesInTimeline.has(city.id)
+                    : true;
+
+                  const isConnectedToSelectedCity =
+                    selectedCityId !== null &&
+                    itinerary.some(
+                      (l) =>
+                        (l.source === selectedCityId && l.dest === city.id) ||
+                        (l.dest === selectedCityId && l.source === city.id)
+                    );
+
+                  // Base pin radius scales slightly with total nights stayed + zoom-invariant invScale
+                  const nightBonus =
+                    totalNights === 0 ? -0.4 : Math.min(2.0, Math.sqrt(totalNights) * 0.38);
+                  const baseRadius = (2.8 + nightBonus) * invScale;
+                  const radius =
+                    isSelected || isTimelineActiveDest
+                      ? baseRadius * 1.35
+                      : isHomeCity
+                        ? baseRadius * 1.25
+                        : isTimelineActiveSource || isConnectedToSelectedCity
+                          ? baseRadius * 1.15
+                          : baseRadius;
+
+                  const pinOpacity =
+                    isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
+                      ? 0.22
+                      : selectedCityId &&
+                          !isSelected &&
+                          !isConnectedToSelectedCity &&
+                          !isTimelineActiveDest
+                        ? 0.45
+                        : 1;
+
+                  return (
+                    <g
+                      key={city.id}
+                      transform={`translate(${x}, ${y})`}
+                      className="cursor-pointer"
+                      style={{ opacity: pinOpacity }}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onSelectCity(city.id);
+                      }}
+                      onMouseEnter={(e) => {
+                        const rect = svgRef.current?.getBoundingClientRect();
+                        if (rect) {
+                          setHoverInfo({
+                            type: 'city',
+                            x: e.clientX - rect.left,
+                            y: e.clientY - rect.top,
+                            cityId: city.id,
+                          });
+                        }
+                      }}
+                      onMouseMove={(e) => {
+                        const rect = svgRef.current?.getBoundingClientRect();
+                        if (rect) {
+                          setHoverInfo({
+                            type: 'city',
+                            x: e.clientX - rect.left,
+                            y: e.clientY - rect.top,
+                            cityId: city.id,
+                          });
+                        }
+                      }}
+                      onMouseLeave={() => setHoverInfo(null)}
+                    >
+                      {/* Invisible hit circle for easy clicking */}
+                      <circle r={Math.max(8 * invScale, radius * 2.2)} fill="transparent" />
+
+                      {/* Gold/Amber Home Base Ring for NYC */}
+                      {isHomeCity && (
+                        <>
+                          <circle
+                            r={radius * 2.15}
+                            fill="#f59e0b"
+                            fillOpacity={0.18}
+                            stroke="#fbbf24"
+                            strokeWidth={1.0 * invScale}
+                            strokeOpacity={0.85}
+                          />
+                        </>
+                      )}
+
+                      {/* Pulse ring for selected city or active timeline destination */}
+                      {(isSelected || isTimelineActiveDest) && (
+                        <>
+                          <circle
+                            r={radius * 2.4}
+                            fill="none"
+                            stroke={isTimelineActiveDest ? '#38bdf8' : '#f8fafc'}
+                            strokeWidth={1.1 * invScale}
+                            strokeOpacity={0.55}
+                          />
+                          <circle
+                            r={radius * 1.65}
+                            fill={isTimelineActiveDest ? '#38bdf8' : '#38bdf8'}
+                            fillOpacity={0.22}
+                          />
+                        </>
+                      )}
+
+                      {/* Outer dark halo for contrast against transit lines */}
+                      <circle
+                        r={radius + 0.75 * invScale}
+                        fill="#060913"
+                        fillOpacity={0.88}
+                      />
+
+                      {/* Main City Pin Circle */}
+                      <circle
+                        r={radius}
+                        fill={
+                          isSelected
+                            ? '#38bdf8'
+                            : isTimelineActiveDest
+                              ? '#22d3ee'
+                              : isHomeCity
+                                ? '#fbbf24'
+                                : isTimelineActiveSource
+                                  ? '#fbbf24'
+                                  : totalNights === 0
+                                    ? '#fda4af'
+                                    : '#f8fafc'
+                        }
+                        stroke="#0f172a"
+                        strokeWidth={0.75 * invScale}
+                      />
+
+                      {/* Inner dot for major multi-night hubs or Home Base */}
+                      {(totalNights >= 4 || isHomeCity) && (
+                        <circle
+                          r={radius * 0.38}
+                          fill="#0f172a"
+                          pointerEvents="none"
+                        />
+                      )}
+
+                      {/* Raised Home Flag Icon on the Home Base Pin (NYC) */}
+                      {isHomeCity && (
+                        <g className="pointer-events-none">
+                          {/* Flagpole rising from top of pin */}
+                          <line
+                            x1={0}
+                            y1={-radius * 0.4}
+                            x2={0}
+                            y2={-radius - 10.5 * invScale}
+                            stroke="#060913"
+                            strokeWidth={2.5 * invScale}
+                            strokeLinecap="round"
+                          />
+                          <line
+                            x1={0}
+                            y1={-radius * 0.4}
+                            x2={0}
+                            y2={-radius - 10.5 * invScale}
+                            stroke="#fef08a"
+                            strokeWidth={1.3 * invScale}
+                            strokeLinecap="round"
+                          />
+                          {/* Waving Pennant Flag */}
+                          <path
+                            d={`M 0 ${(-radius - 10.5 * invScale).toFixed(3)} L ${(7.8 * invScale).toFixed(3)} ${(-radius - 7.8 * invScale).toFixed(3)} L 0 ${(-radius - 5.0 * invScale).toFixed(3)} Z`}
+                            fill="#f59e0b"
+                            stroke="#060913"
+                            strokeWidth={0.9 * invScale}
+                            strokeLinejoin="round"
+                          />
+                        </g>
+                      )}
+                    </g>
+                  );
+                })}
+              </g>
+            ),
+            [
+              activeTimelineLeg?.dest,
+              activeTimelineLeg?.source,
+              cityStats,
+              homeCityId,
+              invScale,
+              isTimelineEnabled,
+              itinerary,
+              onSelectCity,
+              projectedCities,
+              selectedCityId,
+              showFutureLegsInTimeline,
+              svgRef,
+              visitedCitiesInTimeline,
+            ]
+          )}
 
           {/* Directional Arrowheads Layer (Rendered above pin halos so short-hop arrows are never occluded) */}
-          <g className="transit-arrows-layer pointer-events-none">
-            {computedLines.map(({ leg, index, line }) => {
-              if (!visibleModes[leg.transport]) return null;
+          {useMemo(
+            () => (
+              <g className="transit-arrows-layer pointer-events-none">
+                {computedLines.map(({ leg, index, line }) => {
+                  if (!visibleModes[leg.transport]) return null;
 
-              const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
-              const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
-              const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
+                  const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
+                  const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
+                  const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
 
-              if (isFutureTimeline && !showFutureLegsInTimeline) {
-                return null;
-              }
+                  if (isFutureTimeline && !showFutureLegsInTimeline) {
+                    return null;
+                  }
 
-              const modeStyle = transitModes[leg.transport];
-              const isSelectedLeg = selectedLegId === leg.id || isCurrentTimeline;
-              const isConnectedToSelectedCity =
-                selectedCityId !== null &&
-                (leg.source === selectedCityId || leg.dest === selectedCityId);
+                  const modeStyle = transitModes[leg.transport];
+                  const isSelectedLeg = selectedLegId === leg.id || isCurrentTimeline;
+                  const isConnectedToSelectedCity =
+                    selectedCityId !== null &&
+                    (leg.source === selectedCityId || leg.dest === selectedCityId);
 
-              let strokeOpacity = 0.88;
-              if (isTimelineEnabled) {
-                if (isCurrentTimeline) strokeOpacity = 1;
-                else if (isPastTimeline) strokeOpacity = 0.78;
-                else if (isFutureTimeline) strokeOpacity = 0.18;
-              } else if (selectedLegId !== null) {
-                strokeOpacity = isSelectedLeg ? 1 : 0.28;
-              } else if (selectedCityId !== null) {
-                strokeOpacity = isConnectedToSelectedCity ? 0.98 : 0.25;
-              }
+                  let strokeOpacity = 0.88;
+                  if (isTimelineEnabled) {
+                    if (isCurrentTimeline) strokeOpacity = 1;
+                    else if (isPastTimeline) strokeOpacity = 0.78;
+                    else if (isFutureTimeline) strokeOpacity = 0.18;
+                  } else if (selectedLegId !== null) {
+                    strokeOpacity = isSelectedLeg ? 1 : 0.28;
+                  } else if (selectedCityId !== null) {
+                    strokeOpacity = isConnectedToSelectedCity ? 0.98 : 0.25;
+                  }
 
-              const arrowSizeMultiplier = isSelectedLeg
-                ? 1.3
-                : isConnectedToSelectedCity
-                  ? 1.12
-                  : 0.92;
+                  const arrowSizeMultiplier = isSelectedLeg
+                    ? 1.3
+                    : isConnectedToSelectedCity
+                      ? 1.12
+                      : 0.92;
 
-              return (
-                <g key={`arrow-${leg.id}`}>
-                  {line.segments.map((seg, segIdx) => {
-                    // Never shrink arrowheads below 72% of invScale so short-hop arrows remain clearly visible
-                    const arrowScale = Math.max(
-                      invScale * 0.72,
-                      Math.min(invScale, seg.length / (7.5 * arrowSizeMultiplier))
-                    );
-                    const segArrowPath = buildArrowheadPath(arrowScale, arrowSizeMultiplier);
-                    return (
-                      <path
-                        key={segIdx}
-                        d={segArrowPath}
-                        fill={modeStyle.color}
-                        fillOpacity={Math.min(1, strokeOpacity + 0.12)}
-                        stroke="#060913"
-                        strokeWidth={0.85 * arrowScale}
-                        paintOrder="stroke"
-                        transform={`translate(${seg.arrowX}, ${seg.arrowY}) rotate(${seg.arrowAngleDeg})`}
-                      />
-                    );
-                  })}
-                </g>
-              );
-            })}
-          </g>
+                  return (
+                    <g key={`arrow-${leg.id}`}>
+                      {line.segments.map((seg, segIdx) => {
+                        // Never shrink arrowheads below 72% of invScale so short-hop arrows remain clearly visible
+                        const arrowScale = Math.max(
+                          invScale * 0.72,
+                          Math.min(invScale, seg.length / (7.5 * arrowSizeMultiplier))
+                        );
+                        const segArrowPath = buildArrowheadPath(arrowScale, arrowSizeMultiplier);
+                        return (
+                          <path
+                            key={segIdx}
+                            d={segArrowPath}
+                            fill={modeStyle.color}
+                            fillOpacity={Math.min(1, strokeOpacity + 0.12)}
+                            stroke="#060913"
+                            strokeWidth={0.85 * arrowScale}
+                            paintOrder="stroke"
+                            transform={`translate(${seg.arrowX}, ${seg.arrowY}) rotate(${seg.arrowAngleDeg})`}
+                          />
+                        );
+                      })}
+                    </g>
+                  );
+                })}
+              </g>
+            ),
+            [
+              computedLines,
+              currentTimelineLegIndex,
+              invScale,
+              isTimelineEnabled,
+              selectedCityId,
+              selectedLegId,
+              showFutureLegsInTimeline,
+              transitModes,
+              visibleModes,
+            ]
+          )}
 
           {/* Zoom-Invariant City Labels Layer (Topmost SVG Layer) */}
-          <g className="city-labels-layer pointer-events-none">
-            {Object.values(projectedCities).map(({ city, x, y }) => {
-              const isSelected = selectedCityId === city.id;
-              const isHomeCity = city.id === homeCityId;
-              const isTimelineActiveDest = activeTimelineLeg?.dest === city.id;
-              const isVisitedInTimeline = visitedCitiesInTimeline
-                ? visitedCitiesInTimeline.has(city.id)
-                : true;
-              const isConnectedToSelectedCity =
-                selectedCityId !== null &&
-                itinerary.some(
-                  (l) =>
-                    (l.source === selectedCityId && l.dest === city.id) ||
-                    (l.dest === selectedCityId && l.source === city.id)
-                );
+          {useMemo(
+            () => (
+              <g className="city-labels-layer pointer-events-none">
+                {Object.values(projectedCities).map(({ city, x, y }) => {
+                  const isSelected = selectedCityId === city.id;
+                  const isHomeCity = city.id === homeCityId;
+                  const isTimelineActiveDest = activeTimelineLeg?.dest === city.id;
+                  const isVisitedInTimeline = visitedCitiesInTimeline
+                    ? visitedCitiesInTimeline.has(city.id)
+                    : true;
+                  const isConnectedToSelectedCity =
+                    selectedCityId !== null &&
+                    itinerary.some(
+                      (l) =>
+                        (l.source === selectedCityId && l.dest === city.id) ||
+                        (l.dest === selectedCityId && l.source === city.id)
+                    );
 
-              const labelPlacement = smartLabelPlacements[city.id];
-              const shouldShowLabel = Boolean(showLabels && labelPlacement?.visible);
-              if (!shouldShowLabel || !labelPlacement) return null;
+                  const labelPlacement = smartLabelPlacements[city.id];
+                  const shouldShowLabel = Boolean(showLabels && labelPlacement?.visible);
+                  if (!shouldShowLabel || !labelPlacement) return null;
 
-              const labelOpacity =
-                isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
-                  ? 0.22
-                  : selectedCityId &&
-                      !isSelected &&
-                      !isConnectedToSelectedCity &&
-                      !isTimelineActiveDest
-                    ? 0.45
-                    : 1;
+                  const labelOpacity =
+                    isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
+                      ? 0.22
+                      : selectedCityId &&
+                          !isSelected &&
+                          !isConnectedToSelectedCity &&
+                          !isTimelineActiveDest
+                        ? 0.45
+                        : 1;
 
-              return (
-                <g
-                  key={`label-${city.id}`}
-                  transform={`translate(${x}, ${y})`}
-                  style={{ opacity: labelOpacity }}
-                >
-                  <text
-                    x={labelPlacement.dx}
-                    y={labelPlacement.dy}
-                    textAnchor={labelPlacement.textAnchor}
-                    fontSize={labelFontSize * (isHomeCity ? 1.06 : 1)}
-                    fontWeight={isSelected || isTimelineActiveDest || isHomeCity ? 700 : 500}
-                    fill={
-                      isHomeCity
-                        ? '#fde68a'
-                        : isSelected || isTimelineActiveDest
-                          ? '#f8fafc'
-                          : '#cbd5e1'
-                    }
-                    stroke="#060913"
-                    strokeWidth={2.4 * invScale}
-                    paintOrder="stroke"
-                    className="font-sans tracking-tight"
-                  >
-                    {city.name}
-                  </text>
-                </g>
-              );
-            })}
-          </g>
+                  return (
+                    <g
+                      key={`label-${city.id}`}
+                      transform={`translate(${x}, ${y})`}
+                      style={{ opacity: labelOpacity }}
+                    >
+                      <text
+                        x={labelPlacement.dx}
+                        y={labelPlacement.dy}
+                        textAnchor={labelPlacement.textAnchor}
+                        fontSize={labelFontSize * (isHomeCity ? 1.06 : 1)}
+                        fontWeight={isSelected || isTimelineActiveDest || isHomeCity ? 700 : 500}
+                        fill={
+                          isHomeCity
+                            ? '#fde68a'
+                            : isSelected || isTimelineActiveDest
+                              ? '#f8fafc'
+                              : '#cbd5e1'
+                        }
+                        stroke="#060913"
+                        strokeWidth={2.4 * invScale}
+                        paintOrder="stroke"
+                        className="font-sans tracking-tight"
+                      >
+                        {city.name}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
+            ),
+            [
+              activeTimelineLeg?.dest,
+              homeCityId,
+              invScale,
+              isTimelineEnabled,
+              itinerary,
+              labelFontSize,
+              projectedCities,
+              selectedCityId,
+              showFutureLegsInTimeline,
+              showLabels,
+              smartLabelPlacements,
+              visitedCitiesInTimeline,
+            ]
+          )}
         </g>
       </svg>
 
@@ -998,4 +1067,4 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = ({
       )}
     </div>
   );
-};
+});

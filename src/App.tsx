@@ -90,7 +90,8 @@ export const App: React.FC = () => {
     resetCamera,
   } = useMapCamera(activeConfig.mapConfig);
 
-  // Map Topology Hook (uses lightweight 50m below 6x zoom and upgrades to 10m high-res when zoomed >= 6x)
+  // Map Topology Hook (uses lightweight 50m below 6x zoom and upgrades to 10m high-res when zoomed >= 6x,
+  // pausing 10m swaps while auto-playing timeline so high-zoom landings do not rebuild country paths mid-playback)
   const {
     countriesGeoJson,
     admin1GeoJson,
@@ -101,7 +102,7 @@ export const App: React.FC = () => {
     activeConfig.mapConfig.countriesTopoJsonUrl,
     activeConfig.mapConfig.admin1GeoJsonUrl,
     showAdmin1,
-    zoomK >= 6
+    zoomK >= 6 && !isPlayingTimeline
   );
 
   // Automatically resolve city coordinates from the itinerary's source & dest city names
@@ -160,15 +161,19 @@ export const App: React.FC = () => {
     return () => window.clearInterval(timer);
   }, [activeConfig.itinerary.length, isPlayingTimeline, isTimelineEnabled, playbackSpeedMs]);
 
+  // Derive effective selected leg ID so advancing currentTimelineIndex does not require a second cascading state update
+  const effectiveSelectedLegId = isTimelineEnabled
+    ? (activeConfig.itinerary[currentTimelineIndex]?.id ?? selectedLegId)
+    : selectedLegId;
+
   // Trigger camera follow whenever currentTimelineIndex changes while timeline is enabled
   useEffect(() => {
     if (!isTimelineEnabled) return;
-    const leg = activeConfig.itinerary[currentTimelineIndex];
-    if (leg) {
-      setSelectedLegId(leg.id);
+    const rafId = window.requestAnimationFrame(() => {
       followLegDestination(currentTimelineIndex);
-    }
-  }, [activeConfig.itinerary, currentTimelineIndex, followLegDestination, isTimelineEnabled]);
+    });
+    return () => window.cancelAnimationFrame(rafId);
+  }, [currentTimelineIndex, followLegDestination, isTimelineEnabled]);
 
   // Handlers
   const handleSelectRegion = useCallback(
@@ -237,6 +242,20 @@ export const App: React.FC = () => {
     setIsDrawerOpen(false);
   }, []);
 
+  const handleCanvasSelectCity = useCallback(
+    (cityId: string) => {
+      handleSelectCity(cityId, false);
+    },
+    [handleSelectCity]
+  );
+
+  const handleCanvasSelectLeg = useCallback(
+    (leg: ItineraryLegConfig) => {
+      handleSelectLeg(leg, false);
+    },
+    [handleSelectLeg]
+  );
+
   const handleToggleTimelineEnabled = useCallback(
     (enabled: boolean) => {
       setIsTimelineEnabled(enabled);
@@ -300,12 +319,12 @@ export const App: React.FC = () => {
           showGraticule={showGraticule}
           showLabels={showLabels}
           selectedCityId={selectedCityId}
-          selectedLegId={selectedLegId}
+          selectedLegId={effectiveSelectedLegId}
           isTimelineEnabled={isTimelineEnabled}
           currentTimelineLegIndex={currentTimelineIndex}
           showFutureLegsInTimeline={showFutureLegsInTimeline}
-          onSelectCity={(cityId) => handleSelectCity(cityId, false)}
-          onSelectLeg={(leg) => handleSelectLeg(leg, false)}
+          onSelectCity={handleCanvasSelectCity}
+          onSelectLeg={handleCanvasSelectLeg}
           onClearSelection={handleClearSelection}
         />
 
@@ -409,7 +428,7 @@ export const App: React.FC = () => {
       <CityDetailDrawer
         isOpen={isDrawerOpen}
         selectedCityId={selectedCityId}
-        selectedLegId={selectedLegId}
+        selectedLegId={effectiveSelectedLegId}
         homeCityId={activeConfig.itinerary[0]?.source ?? 'NYC'}
         cities={resolvedCities}
         cityStats={cityStats}

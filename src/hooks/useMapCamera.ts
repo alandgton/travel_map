@@ -32,11 +32,13 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
   const zoomBehaviorRef = useRef<ZoomBehavior<SVGSVGElement, unknown> | null>(null);
   const lastCommittedZoomKRef = useRef<number>(1);
   const rafIdRef = useRef<number | null>(null);
+  const isProgrammaticFlightRef = useRef<boolean>(false);
 
   const [viewportWidth, setViewportWidth] = useState<number>(() =>
     typeof window !== 'undefined' ? window.innerWidth : 1280
   );
   const [transform, setTransform] = useState<ZoomTransform>(() => zoomIdentity);
+  const [scaleZoomK, setScaleZoomK] = useState<number>(1);
   const [activeRegionId, setActiveRegionId] = useState<string | null>('world');
 
   // Track responsive viewport width so mobile phones get readable text/pin scaling
@@ -83,6 +85,11 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
 
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent(mapConfig.scaleExtent)
+      .on('start', (event) => {
+        if (event.sourceEvent) {
+          isProgrammaticFlightRef.current = false;
+        }
+      })
       .on('zoom', (event) => {
         const nextTransform: ZoomTransform = event.transform;
 
@@ -93,10 +100,18 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
         }
 
         if (event.sourceEvent) {
+          isProgrammaticFlightRef.current = false;
           setActiveRegionId((prev) => (prev !== null ? null : prev));
         }
 
-        // 2. Only trigger a React state re-render during an active gesture when zoomK
+        // 2. During programmatic camera flights (e.g. Follow Camera in Journey Playback),
+        //    freeze pin/label/line scaling and defer React state re-renders until the flight
+        //    lands in .on('end') so the GPU transform animation runs with zero main-thread jank.
+        if (isProgrammaticFlightRef.current) {
+          return;
+        }
+
+        // 3. During manual user gestures, only trigger a React state re-render when zoomK
         //    changes by >= 14% (throttled via requestAnimationFrame). Pure panning triggers
         //    zero React re-renders during the drag.
         const prevK = lastCommittedZoomKRef.current;
@@ -106,10 +121,12 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
             rafIdRef.current = null;
             lastCommittedZoomKRef.current = nextTransform.k;
             setTransform(nextTransform);
+            setScaleZoomK(nextTransform.k);
           });
         }
       })
       .on('end', (event) => {
+        isProgrammaticFlightRef.current = false;
         if (rafIdRef.current !== null) {
           window.cancelAnimationFrame(rafIdRef.current);
           rafIdRef.current = null;
@@ -120,6 +137,7 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
         }
         lastCommittedZoomKRef.current = finalTransform.k;
         setTransform(finalTransform);
+        setScaleZoomK(finalTransform.k);
       });
 
     zoomBehaviorRef.current = zoomBehavior;
@@ -171,6 +189,19 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
 
       setActiveRegionId(regionId);
 
+      if (rafIdRef.current !== null) {
+        window.cancelAnimationFrame(rafIdRef.current);
+        rafIdRef.current = null;
+      }
+      isProgrammaticFlightRef.current = true;
+
+      // When zooming IN, immediately pre-scale pins/labels/lines to the destination zoom level
+      // so low-zoom text is never magnified into giant text while the camera flies closer.
+      if (nextTransform.k > lastCommittedZoomKRef.current) {
+        lastCommittedZoomKRef.current = nextTransform.k;
+        setScaleZoomK(nextTransform.k);
+      }
+
       select(svgEl)
         .transition()
         .duration(durationMs)
@@ -191,14 +222,27 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
     const zoomBehavior = zoomBehaviorRef.current;
     if (!svgEl || !zoomBehavior) return;
     setActiveRegionId(null);
+    if (rafIdRef.current !== null) {
+      window.cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    isProgrammaticFlightRef.current = true;
+    const targetK = Math.min(mapConfig.scaleExtent[1], lastCommittedZoomKRef.current * 1.5);
+    lastCommittedZoomKRef.current = targetK;
+    setScaleZoomK(targetK);
     select(svgEl).transition().duration(300).call(zoomBehavior.scaleBy, 1.5);
-  }, []);
+  }, [mapConfig.scaleExtent]);
 
   const zoomOut = useCallback(() => {
     const svgEl = svgRef.current;
     const zoomBehavior = zoomBehaviorRef.current;
     if (!svgEl || !zoomBehavior) return;
     setActiveRegionId(null);
+    if (rafIdRef.current !== null) {
+      window.cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    isProgrammaticFlightRef.current = true;
     select(svgEl).transition().duration(300).call(zoomBehavior.scaleBy, 1 / 1.5);
   }, []);
 
@@ -208,17 +252,27 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
     if (!svgEl || !zoomBehavior) return;
     setActiveRegionId('world');
     const worldTransform = computeWorldDefaultTransform();
+    if (rafIdRef.current !== null) {
+      window.cancelAnimationFrame(rafIdRef.current);
+      rafIdRef.current = null;
+    }
+    isProgrammaticFlightRef.current = true;
+    if (worldTransform.k > lastCommittedZoomKRef.current) {
+      lastCommittedZoomKRef.current = worldTransform.k;
+      setScaleZoomK(worldTransform.k);
+    }
     select(svgEl).transition().duration(750).call(zoomBehavior.transform, worldTransform);
   }, [computeWorldDefaultTransform]);
 
-  const zoomK = transform.k;
+  const zoomK = scaleZoomK;
   // Responsive mobile scaling:
   // On mobile phones (< 640px), the 1200-unit SVG viewBox is scaled down ~3x more than on desktop.
-  // Boosting pin/line scale (~1.45x) and text label scale (~2.15x total) keeps mobile labels crisp and readable.
+  // At global/continental views (zoomK <= 2.5), boost pin/line and label scale for legibility,
+  // then smoothly taper both boosts down as the camera zooms in so zoomed-in city labels never look oversized.
   const isMobilePhone = viewportWidth < 640;
   const isTablet = viewportWidth >= 640 && viewportWidth < 1024;
   const deviceVisualMultiplier = isMobilePhone ? 1.45 : isTablet ? 1.18 : 1.0;
-  const labelScaleBoost = isMobilePhone ? 1.55 : isTablet ? 1.2 : 1.0;
+  const baseLabelScaleBoost = isMobilePhone ? 1.45 : isTablet ? 1.18 : 1.0;
 
   // Two-stage zoom-invariant scaling:
   // - Below 8x zoom: 1 / zoomK^0.82 preserves bold global & continental legibility.
@@ -229,11 +283,20 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
       ? 1 / Math.pow(zoomK, mapConfig.zoomInvariantExponent)
       : (1 / Math.pow(8, mapConfig.zoomInvariantExponent)) * Math.pow(8 / zoomK, 0.99);
 
-  // Taper off the mobile visual multiplier as user zooms in past 10x so close island clusters still separate cleanly
+  // Taper off the mobile pin/line multiplier as zoomK increases past 2.5x (reaching 1.0x by 10x zoom)
   const effectiveDeviceMultiplier =
-    zoomK <= 6
+    zoomK <= 2.5
       ? deviceVisualMultiplier
-      : 1 + (deviceVisualMultiplier - 1) * Math.max(0, 1 - (zoomK - 6) / 14);
+      : 1 + (deviceVisualMultiplier - 1) * Math.max(0, 1 - (zoomK - 2.5) / 7.5);
+
+  // Taper off the mobile label boost earlier (between 2x and 5.5x zoom) and slightly
+  // dampen high-zoom label size (>= 5.5x) to offset the zoomK^0.18 growth from baseInvScale.
+  const labelScaleBoost =
+    zoomK <= 2.0
+      ? baseLabelScaleBoost
+      : zoomK <= 5.5
+        ? 1 + (baseLabelScaleBoost - 1) * (1 - (zoomK - 2.0) / 3.5)
+        : Math.max(0.85, 1 - ((zoomK - 5.5) / 20) * 0.15);
 
   const invScale = baseInvScale * effectiveDeviceMultiplier;
 
