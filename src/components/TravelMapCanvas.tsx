@@ -257,11 +257,9 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
       const radius =
         isSelected || isTimelineActiveDest
           ? baseRadius * 1.35
-          : isHomeCity
-            ? baseRadius * 1.25
-            : isTimelineActiveSource || isConnectedToSelectedCity
-              ? baseRadius * 1.15
-              : baseRadius;
+          : isTimelineActiveSource || isConnectedToSelectedCity
+            ? baseRadius * 1.15
+            : baseRadius;
 
       let priority = totalNights * 100 + connectionCount * 15;
       if (isSelected) priority += 100000;
@@ -644,7 +642,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                   const totalNights = stats?.totalNights ?? 0;
 
                   const isSelected = selectedCityId === city.id;
-                  const isHomeCity = city.id === homeCityId;
                   const isTimelineActiveDest = activeTimelineLeg?.dest === city.id;
                   const isTimelineActiveSource = activeTimelineLeg?.source === city.id;
                   const isVisitedInTimeline = visitedCitiesInTimeline
@@ -666,11 +663,9 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                   const radius =
                     isSelected || isTimelineActiveDest
                       ? baseRadius * 1.35
-                      : isHomeCity
-                        ? baseRadius * 1.25
-                        : isTimelineActiveSource || isConnectedToSelectedCity
-                          ? baseRadius * 1.15
-                          : baseRadius;
+                      : isTimelineActiveSource || isConnectedToSelectedCity
+                        ? baseRadius * 1.15
+                        : baseRadius;
 
                   const pinOpacity =
                     isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
@@ -719,38 +714,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                       {/* Invisible hit circle for easy clicking */}
                       <circle r={Math.max(8 * invScale, radius * 2.2)} fill="transparent" />
 
-                      {/* Gold/Amber Home Base Ring for NYC */}
-                      {isHomeCity && (
-                        <>
-                          <circle
-                            r={radius * 2.15}
-                            fill="#f59e0b"
-                            fillOpacity={0.18}
-                            stroke="#fbbf24"
-                            strokeWidth={1.0 * invScale}
-                            strokeOpacity={0.85}
-                          />
-                        </>
-                      )}
-
-                      {/* Pulse ring for selected city or active timeline destination */}
-                      {(isSelected || isTimelineActiveDest) && (
-                        <>
-                          <circle
-                            r={radius * 2.4}
-                            fill="none"
-                            stroke={isTimelineActiveDest ? '#38bdf8' : '#f8fafc'}
-                            strokeWidth={1.1 * invScale}
-                            strokeOpacity={0.55}
-                          />
-                          <circle
-                            r={radius * 1.65}
-                            fill={isTimelineActiveDest ? '#38bdf8' : '#38bdf8'}
-                            fillOpacity={0.22}
-                          />
-                        </>
-                      )}
-
                       {/* Outer dark halo for contrast against transit lines */}
                       <circle
                         r={radius + 0.75 * invScale}
@@ -758,67 +721,13 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                         fillOpacity={0.88}
                       />
 
-                      {/* Main City Pin Circle */}
+                      {/* Main City Pin Circle (uniform color & style for every city) */}
                       <circle
                         r={radius}
-                        fill={
-                          isSelected
-                            ? '#38bdf8'
-                            : isTimelineActiveDest
-                              ? '#22d3ee'
-                              : isHomeCity
-                                ? '#fbbf24'
-                                : isTimelineActiveSource
-                                  ? '#fbbf24'
-                                  : totalNights === 0
-                                    ? '#fda4af'
-                                    : '#f8fafc'
-                        }
+                        fill="#f8fafc"
                         stroke="#0f172a"
                         strokeWidth={0.75 * invScale}
                       />
-
-                      {/* Inner dot for major multi-night hubs or Home Base */}
-                      {(totalNights >= 4 || isHomeCity) && (
-                        <circle
-                          r={radius * 0.38}
-                          fill="#0f172a"
-                          pointerEvents="none"
-                        />
-                      )}
-
-                      {/* Raised Home Flag Icon on the Home Base Pin (NYC) */}
-                      {isHomeCity && (
-                        <g className="pointer-events-none">
-                          {/* Flagpole rising from top of pin */}
-                          <line
-                            x1={0}
-                            y1={-radius * 0.4}
-                            x2={0}
-                            y2={-radius - 10.5 * invScale}
-                            stroke="#060913"
-                            strokeWidth={2.5 * invScale}
-                            strokeLinecap="round"
-                          />
-                          <line
-                            x1={0}
-                            y1={-radius * 0.4}
-                            x2={0}
-                            y2={-radius - 10.5 * invScale}
-                            stroke="#fef08a"
-                            strokeWidth={1.3 * invScale}
-                            strokeLinecap="round"
-                          />
-                          {/* Waving Pennant Flag */}
-                          <path
-                            d={`M 0 ${(-radius - 10.5 * invScale).toFixed(3)} L ${(7.8 * invScale).toFixed(3)} ${(-radius - 7.8 * invScale).toFixed(3)} L 0 ${(-radius - 5.0 * invScale).toFixed(3)} Z`}
-                            fill="#f59e0b"
-                            stroke="#060913"
-                            strokeWidth={0.9 * invScale}
-                            strokeLinejoin="round"
-                          />
-                        </g>
-                      )}
                     </g>
                   );
                 })}
@@ -828,7 +737,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               activeTimelineLeg?.dest,
               activeTimelineLeg?.source,
               cityStats,
-              homeCityId,
               invScale,
               isTimelineEnabled,
               itinerary,
@@ -862,6 +770,11 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                     selectedCityId !== null &&
                     (leg.source === selectedCityId || leg.dest === selectedCityId);
                   const isHoveredLeg = hoveredLegId === leg.id;
+
+                  // Journey Playback relies on camera panning to convey direction, so no arrows there.
+                  if (isTimelineEnabled) {
+                    return null;
+                  }
 
                   // Arrows are hidden by default to reduce visual clutter; only show them on
                   // legs the user is focusing on (selected, hovered, current timeline, or connected to selected city)
