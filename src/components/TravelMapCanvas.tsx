@@ -970,7 +970,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                               : '#cbd5e1'
                         }
                         stroke="#060913"
-                        strokeWidth={2.4 * invScale}
+                        strokeWidth={2.4 * invScale * Math.sqrt(labelScaleBoost)}
                         paintOrder="stroke"
                         className="font-sans tracking-tight"
                       >
@@ -988,6 +988,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               isTimelineEnabled,
               itinerary,
               labelFontSize,
+              labelScaleBoost,
               projectedCities,
               selectedCityId,
               showFutureLegsInTimeline,

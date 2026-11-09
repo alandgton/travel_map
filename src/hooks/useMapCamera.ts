@@ -85,6 +85,27 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
 
     const zoomBehavior = zoom<SVGSVGElement, unknown>()
       .scaleExtent(mapConfig.scaleExtent)
+      .interpolate((viewA: [number, number, number], viewB: [number, number, number]) => {
+        const [x0, y0, w0] = viewA;
+        const [x1, y1, w1] = viewB;
+        const dx = x1 - x0;
+        const dy = y1 - y0;
+
+        // When start and target zoom levels are identical (pure pan), keep zoom width strictly
+        // constant (w1) and pan linearly so d3.interpolateZoom never zooms out and back in mid-pan.
+        if (Math.abs(w0 - w1) / Math.max(w0, w1, 1e-6) < 0.01) {
+          return (t: number): [number, number, number] => [x0 + dx * t, y0 + dy * t, w1];
+        }
+
+        // When zooming in or out, interpolate center linearly and zoom width monotonically
+        // (logarithmically) so the camera never bounces outward before zooming in.
+        const logRatio = Math.log(w1 / w0);
+        return (t: number): [number, number, number] => [
+          x0 + dx * t,
+          y0 + dy * t,
+          w0 * Math.exp(logRatio * t),
+        ];
+      })
       .on('start', (event) => {
         if (event.sourceEvent) {
           isProgrammaticFlightRef.current = false;
@@ -267,12 +288,12 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
   const zoomK = scaleZoomK;
   // Responsive mobile scaling:
   // On mobile phones (< 640px), the 1200-unit SVG viewBox is scaled down ~3x more than on desktop.
-  // At global/continental views (zoomK <= 2.5), boost pin/line and label scale for legibility,
-  // then smoothly taper both boosts down as the camera zooms in so zoomed-in city labels never look oversized.
+  // Maintain a persistent label scale boost across all zoom levels on mobile/tablet so city names
+  // remain clearly readable during regional and local Follow Camera playback.
   const isMobilePhone = viewportWidth < 640;
   const isTablet = viewportWidth >= 640 && viewportWidth < 1024;
   const deviceVisualMultiplier = isMobilePhone ? 1.45 : isTablet ? 1.18 : 1.0;
-  const baseLabelScaleBoost = isMobilePhone ? 1.45 : isTablet ? 1.18 : 1.0;
+  const baseLabelScaleBoost = isMobilePhone ? 1.85 : isTablet ? 1.35 : 1.0;
 
   // Two-stage zoom-invariant scaling:
   // - Below 8x zoom: 1 / zoomK^0.82 preserves bold global & continental legibility.
@@ -283,20 +304,20 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
       ? 1 / Math.pow(zoomK, mapConfig.zoomInvariantExponent)
       : (1 / Math.pow(8, mapConfig.zoomInvariantExponent)) * Math.pow(8 / zoomK, 0.99);
 
-  // Taper off the mobile pin/line multiplier as zoomK increases past 2.5x (reaching 1.0x by 10x zoom)
+  // Gently taper the mobile pin/line multiplier past 3.5x zoom down to a floor (1.25x on phone)
+  // so pins remain crisp without crowding micro-clusters, while preserving mobile legibility.
+  const minDeviceMultiplier = isMobilePhone ? 1.25 : isTablet ? 1.1 : 1.0;
   const effectiveDeviceMultiplier =
-    zoomK <= 2.5
+    zoomK <= 3.5
       ? deviceVisualMultiplier
-      : 1 + (deviceVisualMultiplier - 1) * Math.max(0, 1 - (zoomK - 2.5) / 7.5);
+      : minDeviceMultiplier +
+        (deviceVisualMultiplier - minDeviceMultiplier) * Math.max(0, 1 - (zoomK - 3.5) / 6.5);
 
-  // Taper off the mobile label boost earlier (between 2x and 5.5x zoom) and slightly
-  // dampen high-zoom label size (>= 5.5x) to offset the zoomK^0.18 growth from baseInvScale.
-  const labelScaleBoost =
-    zoomK <= 2.0
-      ? baseLabelScaleBoost
-      : zoomK <= 5.5
-        ? 1 + (baseLabelScaleBoost - 1) * (1 - (zoomK - 2.0) / 3.5)
-        : Math.max(0.85, 1 - ((zoomK - 5.5) / 20) * 0.15);
+  // Preserve baseLabelScaleBoost across all zoom levels on mobile/tablet, applying only a mild
+  // high-zoom dampening factor (>= 5.5x) to offset the zoomK^0.18 growth from baseInvScale.
+  const highZoomLabelDampening =
+    zoomK <= 5.5 ? 1.0 : Math.max(0.88, 1 - ((zoomK - 5.5) / 25) * 0.12);
+  const labelScaleBoost = baseLabelScaleBoost * highZoomLabelDampening;
 
   const invScale = baseInvScale * effectiveDeviceMultiplier;
 

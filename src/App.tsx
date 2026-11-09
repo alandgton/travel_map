@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { GeoProjection } from 'd3-geo';
 import { Loader2, Sparkles } from 'lucide-react';
 import {
   DEFAULT_TRAVEL_MAP_CONFIG,
@@ -16,33 +17,70 @@ import { JourneyPlayback } from './components/JourneyPlayback';
 import { TransitLegendBar } from './components/TransitLegendBar';
 import { TravelMapCanvas } from './components/TravelMapCanvas';
 
+// Minimum and maximum on-screen leg span thresholds (in zoomed 1200x675 SVG viewBox units)
+// within which Follow Camera holds its current zoom level and performs a pure pan.
+const MIN_ZOOM_SPAN_THRESHOLD = 10;
+const MAX_ZOOM_SPAN_THRESHOLD = 380;
+
 /**
- * Computes an adaptive camera zoom level for a leg based on the geographic span
- * between source and destination so short island-hopping bike legs zoom in closely
- * while intercontinental flights frame a wider region around the destination.
+ * Computes an adaptive camera zoom level for a leg with a screen-space min/max distance
+ * deadband so consecutive regional stops (e.g. across Europe or Mainland China) pan
+ * smoothly at a constant zoom level without unnecessary zooming in and out.
  */
 function getContextualZoomForLeg(
   sourceCoords: [number, number] | undefined,
   destCoords: [number, number],
-  transport: TransitMode
+  transport: TransitMode,
+  currentZoomK: number,
+  projection: GeoProjection
 ): number {
   if (transport === 'Bike') {
     return 42;
   }
   if (!sourceCoords) {
-    return 5.5;
+    return 5.8;
   }
-  const dLon = Math.abs(sourceCoords[0] - destCoords[0]);
+
+  const rawDLon = Math.abs(sourceCoords[0] - destCoords[0]);
+  const dLon = Math.min(rawDLon, 360 - rawDLon);
   const dLat = Math.abs(sourceCoords[1] - destCoords[1]);
   const span = Math.hypot(dLon, dLat);
 
-  if (span < 0.6) return 38;
-  if (span < 1.2) return 16;
-  if (span < 3.5) return 7.5;
-  if (span < 8) return 6.0;
-  if (span < 20) return 4.8;
-  if (span < 50) return 3.6;
-  return 2.6;
+  // Base zoom tiers:
+  // - < 0.35°: Micro-cluster hops (Shimanami Kaido island chain) -> 42x
+  // - 0.35°..18°: Regional travel (intra-Europe, Egypt, Mainland China, Korea & Japan) -> 5.8x
+  // - 18°..42°: Cross-regional medium-haul flights (e.g. Munich->Cairo, Singapore->Chengdu) -> 3.6x
+  // - >= 42°: Long-haul / intercontinental flights (e.g. NYC->SF, NYC->Stockholm, Tokyo->LA) -> 2.6x
+  let idealZoom: number;
+  if (span < 0.35) {
+    idealZoom = 42;
+  } else if (span < 18) {
+    idealZoom = 5.8;
+  } else if (span < 42) {
+    idealZoom = 3.6;
+  } else {
+    idealZoom = 2.6;
+  }
+
+  // Min/Max projected distance deadband:
+  // When the leg's on-screen distance at currentZoomK is already within [MIN, MAX] and
+  // currentZoomK is within the same regional tier band, hold currentZoomK for a pure pan.
+  const pSource = projection(sourceCoords);
+  const pDest = projection(destCoords);
+  if (pSource && pDest && rawDLon < 180) {
+    const projectedDist = Math.hypot(pDest[0] - pSource[0], pDest[1] - pSource[1]);
+    const zoomedSpan = projectedDist * currentZoomK;
+    const isWithinDistanceDeadband =
+      zoomedSpan >= MIN_ZOOM_SPAN_THRESHOLD && zoomedSpan <= MAX_ZOOM_SPAN_THRESHOLD;
+    const isWithinTierHysteresis =
+      currentZoomK >= idealZoom * 0.78 && currentZoomK <= idealZoom * 1.35;
+
+    if (isWithinDistanceDeadband && isWithinTierHysteresis) {
+      return currentZoomK;
+    }
+  }
+
+  return idealZoom;
 }
 
 export const App: React.FC = () => {
@@ -123,6 +161,13 @@ export const App: React.FC = () => {
     [resolvedCities, activeConfig.itinerary]
   );
 
+  // Track active camera zoom in a ref so Follow Camera deadband calculations always read
+  // the latest target/committed zoom without re-triggering the timeline effect when zoom settles.
+  const currentZoomKRef = useRef<number>(zoomK);
+  useEffect(() => {
+    currentZoomKRef.current = zoomK;
+  }, [zoomK]);
+
   // Follow camera effect when timeline index advances and autoFollowCamera is enabled
   const followLegDestination = useCallback(
     (legIndex: number) => {
@@ -136,11 +181,21 @@ export const App: React.FC = () => {
       const targetZoom = getContextualZoomForLeg(
         sourceCity?.coordinates,
         destCity.coordinates,
-        leg.transport
+        leg.transport,
+        currentZoomKRef.current,
+        projection
       );
+      currentZoomKRef.current = targetZoom;
       flyToCoordinates(destCity.coordinates, targetZoom, Math.min(850, playbackSpeedMs * 0.75));
     },
-    [resolvedCities, activeConfig.itinerary, autoFollowCamera, flyToCoordinates, playbackSpeedMs]
+    [
+      resolvedCities,
+      activeConfig.itinerary,
+      autoFollowCamera,
+      flyToCoordinates,
+      playbackSpeedMs,
+      projection,
+    ]
   );
 
   // Auto-advance timer when timeline playback is active
