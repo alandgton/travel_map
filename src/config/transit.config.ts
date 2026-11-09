@@ -13,25 +13,25 @@ export const TRANSIT_MODES_CONFIG: Record<TransitMode, TransitModeStyleConfig> =
     mode: 'Train',
     label: 'Train',
     color: '#10b981', // emerald
-    strokeDasharray: '6, 4',
+    strokeDasharray: 'none',
     baseStrokeWidth: 2.0,
-    description: 'High-speed & regional rail (dashed emerald line)',
+    description: 'High-speed & regional rail (solid emerald line)',
   },
   Drive: {
     mode: 'Drive',
     label: 'Drive',
     color: '#f59e0b', // amber
-    strokeDasharray: '2, 3.5',
+    strokeDasharray: 'none',
     baseStrokeWidth: 1.95,
-    description: 'Overland driving transit (dotted amber line)',
+    description: 'Overland driving transit (solid amber line)',
   },
   Bike: {
     mode: 'Bike',
     label: 'Bike',
     color: '#f43f5e', // rose
-    strokeDasharray: '6, 2.5, 1.5, 2.5',
+    strokeDasharray: 'none',
     baseStrokeWidth: 2.1,
-    description: 'Shimanami Kaido island cycling (dash-dot rose line)',
+    description: 'Shimanami Kaido island cycling (solid rose line)',
   },
 };
 
