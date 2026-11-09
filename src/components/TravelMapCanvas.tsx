@@ -89,6 +89,8 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
   onClearSelection,
 }) => {
   const [hoverInfo, setHoverInfo] = useState<HoverTooltipState | null>(null);
+  // Stable primitive so the arrow layer memo only recomputes when the hovered leg changes (not on every mousemove)
+  const hoveredLegId = hoverInfo?.type === 'leg' ? (hoverInfo.leg?.id ?? null) : null;
 
   const pathGenerator = useMemo(() => geoPath(projection), [projection]);
 
@@ -859,6 +861,13 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                   const isConnectedToSelectedCity =
                     selectedCityId !== null &&
                     (leg.source === selectedCityId || leg.dest === selectedCityId);
+                  const isHoveredLeg = hoveredLegId === leg.id;
+
+                  // Arrows are hidden by default to reduce visual clutter; only show them on
+                  // legs the user is focusing on (selected, hovered, current timeline, or connected to selected city)
+                  if (!isSelectedLeg && !isHoveredLeg && !isConnectedToSelectedCity) {
+                    return null;
+                  }
 
                   let strokeOpacity = 0.88;
                   if (isTimelineEnabled) {
@@ -871,9 +880,11 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                     strokeOpacity = isConnectedToSelectedCity ? 0.98 : 0.25;
                   }
 
+                  if (isHoveredLeg) strokeOpacity = Math.max(strokeOpacity, 0.95);
+
                   const arrowSizeMultiplier = isSelectedLeg
                     ? 1.3
-                    : isConnectedToSelectedCity
+                    : isConnectedToSelectedCity || isHoveredLeg
                       ? 1.12
                       : 0.92;
 
@@ -907,6 +918,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
             [
               computedLines,
               currentTimelineLegIndex,
+              hoveredLegId,
               invScale,
               isTimelineEnabled,
               selectedCityId,
