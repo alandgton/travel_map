@@ -22,20 +22,44 @@ import { TravelMapCanvas } from './components/TravelMapCanvas';
 const MIN_ZOOM_SPAN_THRESHOLD = 10;
 const MAX_ZOOM_SPAN_THRESHOLD = 380;
 
+// Default steady high-zoom level for Shimanami Kaido micro-cluster island hops
+// and the intermediate approach zoom when arriving at the cluster origin (Onomichi).
+const DEFAULT_MICRO_CLUSTER_ZOOM = 185;
+const MICRO_CLUSTER_APPROACH_ZOOM = 32;
+
+function isMicroClusterLeg(
+  sourceCoords: [number, number] | undefined,
+  destCoords: [number, number] | undefined,
+  transport: TransitMode
+): boolean {
+  if (transport === 'Bike') return true;
+  if (!sourceCoords || !destCoords) return false;
+  const rawDLon = Math.abs(sourceCoords[0] - destCoords[0]);
+  const dLon = Math.min(rawDLon, 360 - rawDLon);
+  const dLat = Math.abs(sourceCoords[1] - destCoords[1]);
+  return Math.hypot(dLon, dLat) < 0.35;
+}
+
 /**
  * Computes an adaptive camera zoom level for a leg with a screen-space min/max distance
- * deadband so consecutive regional stops (e.g. across Europe or Mainland China) pan
- * smoothly at a constant zoom level without unnecessary zooming in and out.
+ * deadband so consecutive regional stops (e.g. across Europe or Mainland China) or
+ * micro-cluster island hops (Shimanami Kaido) pan smoothly at a constant zoom level
+ * without unnecessary zooming in and out.
  */
 function getContextualZoomForLeg(
   sourceCoords: [number, number] | undefined,
   destCoords: [number, number],
   transport: TransitMode,
   currentZoomK: number,
-  projection: GeoProjection
+  projection: GeoProjection,
+  microClusterZoom: number = DEFAULT_MICRO_CLUSTER_ZOOM,
+  isApproachingMicroCluster: boolean = false
 ): number {
-  if (transport === 'Bike') {
-    return 42;
+  if (isMicroClusterLeg(sourceCoords, destCoords, transport)) {
+    return microClusterZoom;
+  }
+  if (isApproachingMicroCluster) {
+    return MICRO_CLUSTER_APPROACH_ZOOM;
   }
   if (!sourceCoords) {
     return 5.8;
@@ -47,13 +71,13 @@ function getContextualZoomForLeg(
   const span = Math.hypot(dLon, dLat);
 
   // Base zoom tiers:
-  // - < 0.35°: Micro-cluster hops (Shimanami Kaido island chain) -> 42x
+  // - < 0.35°: Micro-cluster hops (Shimanami Kaido island chain) -> steady microClusterZoom
   // - 0.35°..18°: Regional travel (intra-Europe, Egypt, Mainland China, Korea & Japan) -> 5.8x
   // - 18°..42°: Cross-regional medium-haul flights (e.g. Munich->Cairo, Singapore->Chengdu) -> 3.6x
   // - >= 42°: Long-haul / intercontinental flights (e.g. NYC->SF, NYC->Stockholm, Tokyo->LA) -> 2.6x
   let idealZoom: number;
   if (span < 0.35) {
-    idealZoom = 42;
+    idealZoom = microClusterZoom;
   } else if (span < 18) {
     idealZoom = 5.8;
   } else if (span < 42) {
@@ -121,6 +145,7 @@ export const App: React.FC = () => {
     invScale,
     labelScaleBoost,
     activeRegionId,
+    computeBoundsFit,
     flyToCoordinates,
     flyToRegion,
     zoomIn,
@@ -150,6 +175,35 @@ export const App: React.FC = () => {
     unresolvedCities,
   } = useResolvedCities(activeConfig.itinerary);
 
+  // Compute responsive region presets (e.g. dynamic viewport fit for Shimanami Kaido's 4 bike stops)
+  const effectiveRegions = useMemo(() => {
+    const map: Record<string, RegionCameraConfig> = {};
+    for (const [id, region] of Object.entries(activeConfig.regions)) {
+      if (region.fitCities && region.fitCities.length >= 2) {
+        const coordsList = region.fitCities
+          .map((cid) => resolvedCities[cid]?.coordinates)
+          .filter((c): c is [number, number] => Boolean(c));
+        const fit = computeBoundsFit(coordsList, {
+          minZoom: region.zoom * 0.75,
+        });
+        if (fit) {
+          map[id] = {
+            ...region,
+            center: fit.center,
+            zoom: fit.zoom,
+          };
+          continue;
+        }
+      }
+      map[id] = region;
+    }
+    return map;
+  }, [activeConfig.regions, computeBoundsFit, resolvedCities]);
+
+  // Steady high-zoom level shared across the Shimanami Kaido stretch
+  const shimanamiClusterZoom =
+    effectiveRegions.shimanami?.zoom ?? DEFAULT_MICRO_CLUSTER_ZOOM;
+
   // Derived Statistics
   const cityStats = useMemo(
     () => computeAllCityStats(resolvedCities, activeConfig.itinerary),
@@ -178,12 +232,29 @@ export const App: React.FC = () => {
       const sourceCity = resolvedCities[leg.source];
       if (!destCity) return;
 
+      // Detect whether the upcoming leg enters a micro-cluster (e.g. Kyoto -> Onomichi before Onomichi -> Setoda)
+      // so the camera steps into an intermediate approach zoom on arrival before zooming to cluster scale.
+      const nextLeg = activeConfig.itinerary[legIndex + 1];
+      const nextSourceCoords = nextLeg ? resolvedCities[nextLeg.source]?.coordinates : undefined;
+      const nextDestCoords = nextLeg ? resolvedCities[nextLeg.dest]?.coordinates : undefined;
+      const isCurrMicro = isMicroClusterLeg(
+        sourceCity?.coordinates,
+        destCity.coordinates,
+        leg.transport
+      );
+      const isNextMicro = nextLeg
+        ? isMicroClusterLeg(nextSourceCoords, nextDestCoords, nextLeg.transport)
+        : false;
+      const isApproachingMicroCluster = !isCurrMicro && isNextMicro;
+
       const targetZoom = getContextualZoomForLeg(
         sourceCity?.coordinates,
         destCity.coordinates,
         leg.transport,
         currentZoomKRef.current,
-        projection
+        projection,
+        shimanamiClusterZoom,
+        isApproachingMicroCluster
       );
       currentZoomKRef.current = targetZoom;
       flyToCoordinates(destCity.coordinates, targetZoom, Math.min(850, playbackSpeedMs * 0.75));
@@ -195,6 +266,7 @@ export const App: React.FC = () => {
       flyToCoordinates,
       playbackSpeedMs,
       projection,
+      shimanamiClusterZoom,
     ]
   );
 
@@ -233,9 +305,12 @@ export const App: React.FC = () => {
   // Handlers
   const handleSelectRegion = useCallback(
     (region: RegionCameraConfig) => {
-      flyToRegion(region, 850);
+      const fitCoords = region.fitCities
+        ?.map((cid) => resolvedCities[cid]?.coordinates)
+        .filter((c): c is [number, number] => Boolean(c));
+      flyToRegion(region, 850, fitCoords);
     },
-    [flyToRegion]
+    [flyToRegion, resolvedCities]
   );
 
   const handleToggleMode = useCallback((mode: TransitMode) => {
@@ -268,9 +343,9 @@ export const App: React.FC = () => {
       const city = resolvedCities[cityId];
       if (!city) return;
       const isShimanami = ['Onomichi', 'Setoda', 'Omishima', 'Imabari'].includes(cityId);
-      flyToCoordinates(city.coordinates, isShimanami ? 42 : 7.5, 750);
+      flyToCoordinates(city.coordinates, isShimanami ? shimanamiClusterZoom : 7.5, 750);
     },
-    [resolvedCities, flyToCoordinates]
+    [resolvedCities, flyToCoordinates, shimanamiClusterZoom]
   );
 
   const handleSelectLeg = useCallback(
@@ -333,7 +408,7 @@ export const App: React.FC = () => {
       <RegionSelectorBar
         title={activeConfig.title}
         subtitle={activeConfig.subtitle}
-        regions={activeConfig.regions}
+        regions={effectiveRegions}
         activeRegionId={activeRegionId}
         zoomK={zoomK}
         showAdmin1={showAdmin1}

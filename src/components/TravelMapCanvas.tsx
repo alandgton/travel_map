@@ -253,7 +253,8 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
 
       const nightBonus =
         totalNights === 0 ? -0.4 : Math.min(2.0, Math.sqrt(totalNights) * 0.38);
-      const baseRadius = (2.8 + nightBonus) * invScale;
+      // Home city uses a fixed base size equal to the largest regular pin (2.8 + max nightBonus 2.0)
+      const baseRadius = (isHomeCity ? 4.8 : 2.8 + nightBonus) * invScale;
       const radius =
         isSelected || isTimelineActiveDest
           ? baseRadius * 1.35
@@ -655,11 +656,13 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                         (l.source === selectedCityId && l.dest === city.id) ||
                         (l.dest === selectedCityId && l.source === city.id)
                     );
+                  const isHomeCity = city.id === homeCityId;
 
                   // Base pin radius scales slightly with total nights stayed + zoom-invariant invScale
                   const nightBonus =
                     totalNights === 0 ? -0.4 : Math.min(2.0, Math.sqrt(totalNights) * 0.38);
-                  const baseRadius = (2.8 + nightBonus) * invScale;
+                  // Home city uses a fixed base size equal to the largest regular pin
+                  const baseRadius = (isHomeCity ? 4.8 : 2.8 + nightBonus) * invScale;
                   const radius =
                     isSelected || isTimelineActiveDest
                       ? baseRadius * 1.35
@@ -721,13 +724,31 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                         fillOpacity={0.88}
                       />
 
-                      {/* Main City Pin Circle (uniform color & style for every city) */}
-                      <circle
-                        r={radius}
-                        fill="#f8fafc"
-                        stroke="#0f172a"
-                        strokeWidth={0.75 * invScale}
-                      />
+                      {isHomeCity ? (
+                        <>
+                          {/* Home City Pin: amber circle with a house glyph */}
+                          <circle
+                            r={radius}
+                            fill="#f59e0b"
+                            stroke="#0f172a"
+                            strokeWidth={0.75 * invScale}
+                          />
+                          {/* House glyph drawn in unit space [-1, 1] and scaled to the pin radius */}
+                          <path
+                            transform={`scale(${radius})`}
+                            d="M 0 -0.62 L 0.6 -0.08 L 0.42 -0.08 L 0.42 0.52 L 0.12 0.52 L 0.12 0.18 L -0.12 0.18 L -0.12 0.52 L -0.42 0.52 L -0.42 -0.08 L -0.6 -0.08 Z"
+                            fill="#0f172a"
+                          />
+                        </>
+                      ) : (
+                        /* Main City Pin Circle (uniform color & style for every non-home city) */
+                        <circle
+                          r={radius}
+                          fill="#f8fafc"
+                          stroke="#0f172a"
+                          strokeWidth={0.75 * invScale}
+                        />
+                      )}
                     </g>
                   );
                 })}
@@ -737,6 +758,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               activeTimelineLeg?.dest,
               activeTimelineLeg?.source,
               cityStats,
+              homeCityId,
               invScale,
               isTimelineEnabled,
               itinerary,

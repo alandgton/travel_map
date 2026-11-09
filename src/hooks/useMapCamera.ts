@@ -5,6 +5,14 @@ import 'd3-transition';
 import { zoom, zoomIdentity, ZoomBehavior, ZoomTransform } from 'd3-zoom';
 import { MapRenderConfig, RegionCameraConfig } from '../config/types';
 
+export interface FlyToBoundsOptions {
+  paddingRatio?: number;
+  maxZoom?: number;
+  minZoom?: number;
+  durationMs?: number;
+  regionId?: string | null;
+}
+
 export interface UseMapCameraReturn {
   svgRef: React.RefObject<SVGSVGElement>;
   cameraGroupRef: React.RefObject<SVGGElement>;
@@ -14,13 +22,22 @@ export interface UseMapCameraReturn {
   invScale: number;
   labelScaleBoost: number;
   activeRegionId: string | null;
+  computeBoundsFit: (
+    coordsList: [number, number][],
+    options?: Pick<FlyToBoundsOptions, 'paddingRatio' | 'maxZoom' | 'minZoom'>
+  ) => { center: [number, number]; zoom: number } | null;
   flyToCoordinates: (
     coords: [number, number],
     targetZoom?: number,
     durationMs?: number,
     regionId?: string | null
   ) => void;
-  flyToRegion: (region: RegionCameraConfig, durationMs?: number) => void;
+  flyToBounds: (coordsList: [number, number][], options?: FlyToBoundsOptions) => void;
+  flyToRegion: (
+    region: RegionCameraConfig,
+    durationMs?: number,
+    resolvedCoordsList?: [number, number][]
+  ) => void;
   zoomIn: () => void;
   zoomOut: () => void;
   resetCamera: () => void;
@@ -179,6 +196,64 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
     };
   }, [computeWorldDefaultTransform, mapConfig.scaleExtent]);
 
+  const computeBoundsFit = useCallback(
+    (
+      coordsList: [number, number][],
+      options?: Pick<FlyToBoundsOptions, 'paddingRatio' | 'maxZoom' | 'minZoom'>
+    ): { center: [number, number]; zoom: number } | null => {
+      if (!coordsList || coordsList.length === 0) return null;
+
+      let minX = Infinity;
+      let maxX = -Infinity;
+      let minY = Infinity;
+      let maxY = -Infinity;
+      let minLon = Infinity;
+      let maxLon = -Infinity;
+      let minLat = Infinity;
+      let maxLat = -Infinity;
+
+      for (const coords of coordsList) {
+        const pt = projection(coords);
+        if (!pt) continue;
+        if (pt[0] < minX) minX = pt[0];
+        if (pt[0] > maxX) maxX = pt[0];
+        if (pt[1] < minY) minY = pt[1];
+        if (pt[1] > maxY) maxY = pt[1];
+        if (coords[0] < minLon) minLon = coords[0];
+        if (coords[0] > maxLon) maxLon = coords[0];
+        if (coords[1] < minLat) minLat = coords[1];
+        if (coords[1] > maxLat) maxLat = coords[1];
+      }
+
+      if (!Number.isFinite(minX) || !Number.isFinite(minY)) return null;
+
+      const bboxW = Math.max(0.05, maxX - minX);
+      const bboxH = Math.max(0.05, maxY - minY);
+
+      // Account for HUD chrome and mobile vs desktop usable viewport proportions
+      const isPhone = viewportWidth < 640;
+      const isTab = viewportWidth >= 640 && viewportWidth < 1024;
+      const defaultUsableRatio = isPhone ? 0.38 : isTab ? 0.52 : 0.62;
+      const usableRatio = options?.paddingRatio ?? defaultUsableRatio;
+
+      const usableW = mapConfig.width * usableRatio;
+      const usableH = mapConfig.height * usableRatio;
+
+      const rawZoom = Math.min(usableW / bboxW, usableH / bboxH);
+      const minZ = options?.minZoom ?? mapConfig.scaleExtent[0];
+      const maxZ = options?.maxZoom ?? mapConfig.scaleExtent[1];
+      const clampedZoom = Math.round(Math.max(minZ, Math.min(maxZ, rawZoom)));
+
+      const centerX = (minX + maxX) / 2;
+      const centerY = (minY + maxY) / 2;
+      const inverted = projection.invert ? projection.invert([centerX, centerY]) : null;
+      const center: [number, number] = inverted ?? [(minLon + maxLon) / 2, (minLat + maxLat) / 2];
+
+      return { center, zoom: clampedZoom };
+    },
+    [mapConfig.height, mapConfig.scaleExtent, mapConfig.width, projection, viewportWidth]
+  );
+
   const flyToCoordinates = useCallback(
     (
       coords: [number, number],
@@ -231,11 +306,37 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
     [computeWorldDefaultTransform, mapConfig.height, mapConfig.scaleExtent, mapConfig.width, projection]
   );
 
+  const flyToBounds = useCallback(
+    (coordsList: [number, number][], options?: FlyToBoundsOptions) => {
+      const fit = computeBoundsFit(coordsList, options);
+      if (!fit) return;
+      flyToCoordinates(
+        fit.center,
+        fit.zoom,
+        options?.durationMs ?? 850,
+        options?.regionId ?? null
+      );
+    },
+    [computeBoundsFit, flyToCoordinates]
+  );
+
   const flyToRegion = useCallback(
-    (region: RegionCameraConfig, durationMs: number = 850) => {
+    (
+      region: RegionCameraConfig,
+      durationMs: number = 850,
+      resolvedCoordsList?: [number, number][]
+    ) => {
+      if (resolvedCoordsList && resolvedCoordsList.length >= 2) {
+        flyToBounds(resolvedCoordsList, {
+          durationMs,
+          regionId: region.id,
+          minZoom: region.zoom * 0.75,
+        });
+        return;
+      }
       flyToCoordinates(region.center, region.zoom, durationMs, region.id);
     },
-    [flyToCoordinates]
+    [flyToBounds, flyToCoordinates]
   );
 
   const zoomIn = useCallback(() => {
@@ -330,7 +431,9 @@ export function useMapCamera(mapConfig: MapRenderConfig): UseMapCameraReturn {
     invScale,
     labelScaleBoost,
     activeRegionId,
+    computeBoundsFit,
     flyToCoordinates,
+    flyToBounds,
     flyToRegion,
     zoomIn,
     zoomOut,

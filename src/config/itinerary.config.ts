@@ -81,7 +81,7 @@ export const ITINERARY_STOPS: ItineraryStopInput[] = [
   { startDate: '2026-10-10', endDate: '2026-10-12', city: 'Dubai', transport: 'Flight' },
   { startDate: '2026-10-12', endDate: '2026-10-15', city: 'Singapore', transport: 'Flight' },
   { startDate: '2026-10-15', endDate: '2026-10-18', city: 'Chengdu', transport: 'Flight' },
-  { startDate: '2026-10-18', endDate: '2026-10-20', city: 'Jiuzhaigou', transport: 'Flight' },
+  { startDate: '2026-10-18', endDate: '2026-10-20', city: 'Jiuzhaigou', transport: 'Drive' },
   { startDate: '2026-10-20', endDate: '2026-10-22', city: 'Emeishan', transport: 'Drive' },
   { startDate: '2026-10-22', endDate: '2026-10-23', city: 'Chengdu', transport: 'Drive' },
   { startDate: '2026-10-23', endDate: '2026-10-25', city: 'Chongqing', transport: 'Train' },

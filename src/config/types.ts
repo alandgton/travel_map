@@ -55,6 +55,8 @@ export interface RegionCameraConfig {
   /** [longitude, latitude] center coordinate */
   center: [number, number];
   zoom: number;
+  /** Optional list of city IDs to dynamically fit in the unobstructed viewport */
+  fitCities?: string[];
   description?: string;
 }
 

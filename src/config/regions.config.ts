@@ -53,9 +53,10 @@ export const REGIONS_CONFIG: Record<string, RegionCameraConfig> = {
     id: 'shimanami',
     label: 'Shimanami Kaido',
     shortLabel: 'Shimanami Kaido',
-    center: [133.0, 34.12],
-    zoom: 42,
+    center: [133.06, 34.238],
+    zoom: 185,
+    fitCities: ['Onomichi', 'Setoda', 'Omishima', 'Imabari'],
     description:
-      'High-zoom Seto Inland Sea island-hopping bike & rail route (Onomichi → Setoda → Omishima → Imabari → Matsuyama)',
+      'High-zoom Seto Inland Sea island-hopping bike route (Onomichi → Setoda → Omishima → Imabari)',
   },
 };
