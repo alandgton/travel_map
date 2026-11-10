@@ -7,7 +7,6 @@ import {
   Crosshair,
   Flag,
   MapPin,
-  Play,
   Route,
   Search,
   X,
@@ -183,14 +182,6 @@ export const CityDetailDrawer: React.FC<CityDetailDrawerProps> = ({
             <span className="font-mono text-[11px] font-semibold text-sky-400">
               Selected Transit Line · Leg #{activeLeg.id}
             </span>
-            <button
-              type="button"
-              onClick={() => onSelectLeg(activeLeg, true)}
-              className="flex items-center gap-1 rounded bg-sky-500/20 hover:bg-sky-500/30 border border-sky-500/40 px-2 py-0.5 text-[11px] font-medium text-sky-300 transition"
-            >
-              <Play className="h-2.5 w-2.5 fill-current" />
-              <span>Scrub Here</span>
-            </button>
           </div>
           <div className="mt-1 flex items-center justify-between text-xs">
             <div className="font-semibold text-white">

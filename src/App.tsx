@@ -130,9 +130,6 @@ export const App: React.FC = () => {
   // Opt-In Journey Playback State
   const [isTimelineEnabled, setIsTimelineEnabled] = useState<boolean>(false);
   const [isPlayingTimeline, setIsPlayingTimeline] = useState<boolean>(false);
-  // Section 4 requirement: Follow Toggle (autoFollowCamera) is enabled (true) by default
-  const [autoFollowCamera, setAutoFollowCamera] = useState<boolean>(true);
-  const [showFutureLegsInTimeline, setShowFutureLegsInTimeline] = useState<boolean>(false);
   const [currentTimelineIndex, setCurrentTimelineIndex] = useState<number>(0);
   const [playbackSpeedMs, setPlaybackSpeedMs] = useState<number>(1400);
 
@@ -222,10 +219,9 @@ export const App: React.FC = () => {
     currentZoomKRef.current = zoomK;
   }, [zoomK]);
 
-  // Follow camera effect when timeline index advances and autoFollowCamera is enabled
+  // Follow camera effect when timeline index advances (always enabled)
   const followLegDestination = useCallback(
     (legIndex: number) => {
-      if (!autoFollowCamera) return;
       const leg = activeConfig.itinerary[legIndex];
       if (!leg) return;
       const destCity = resolvedCities[leg.dest];
@@ -262,7 +258,6 @@ export const App: React.FC = () => {
     [
       resolvedCities,
       activeConfig.itinerary,
-      autoFollowCamera,
       flyToCoordinates,
       playbackSpeedMs,
       projection,
@@ -452,7 +447,6 @@ export const App: React.FC = () => {
           selectedLegId={effectiveSelectedLegId}
           isTimelineEnabled={isTimelineEnabled}
           currentTimelineLegIndex={currentTimelineIndex}
-          showFutureLegsInTimeline={showFutureLegsInTimeline}
           onSelectCity={handleCanvasSelectCity}
           onSelectLeg={handleCanvasSelectLeg}
           onClearSelection={handleClearSelection}
@@ -516,8 +510,6 @@ export const App: React.FC = () => {
           <JourneyPlayback
             isEnabled={isTimelineEnabled}
             isPlaying={isPlayingTimeline}
-            autoFollowCamera={autoFollowCamera}
-            showFutureLegs={showFutureLegsInTimeline}
             currentIndex={currentTimelineIndex}
             itinerary={activeConfig.itinerary}
             cities={resolvedCities}
@@ -538,16 +530,10 @@ export const App: React.FC = () => {
               setIsPlayingTimeline(false);
               setCurrentTimelineIndex((i) => Math.min(activeConfig.itinerary.length - 1, i + 1));
             }}
-            onReset={() => {
-              setIsPlayingTimeline(false);
-              setCurrentTimelineIndex(0);
-            }}
             onScrub={(idx) => {
               setIsPlayingTimeline(false);
               setCurrentTimelineIndex(idx);
             }}
-            onToggleAutoFollow={setAutoFollowCamera}
-            onToggleShowFutureLegs={setShowFutureLegsInTimeline}
             onChangeSpeed={setPlaybackSpeedMs}
             onInspectCity={(cityId) => handleSelectCity(cityId, false)}
           />

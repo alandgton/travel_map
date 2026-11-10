@@ -47,7 +47,6 @@ interface TravelMapCanvasProps {
   selectedLegId: number | null;
   isTimelineEnabled: boolean;
   currentTimelineLegIndex: number; // 0-based index into itinerary
-  showFutureLegsInTimeline: boolean;
   onSelectCity: (cityId: string) => void;
   onSelectLeg: (leg: ItineraryLegConfig) => void;
   onClearSelection: () => void;
@@ -84,7 +83,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
   selectedLegId,
   isTimelineEnabled,
   currentTimelineLegIndex,
-  showFutureLegsInTimeline,
   onSelectCity,
   onSelectLeg,
   onClearSelection,
@@ -577,11 +575,10 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                 {computedLines.map(({ leg, index, line }) => {
                   if (!visibleModes[leg.transport]) return null;
 
-                  const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
                   const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
                   const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
 
-                  if (isFutureTimeline && !showFutureLegsInTimeline) {
+                  if (isFutureTimeline) {
                     return null;
                   }
 
@@ -594,9 +591,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                   // Compute opacity based on selection / timeline state
                   let strokeOpacity = 0.84;
                   if (isTimelineEnabled) {
-                    if (isCurrentTimeline) strokeOpacity = 1;
-                    else if (isPastTimeline) strokeOpacity = 0.72;
-                    else if (isFutureTimeline) strokeOpacity = 0.16;
+                    strokeOpacity = isCurrentTimeline ? 1 : 0.72;
                   } else if (selectedLegId !== null) {
                     strokeOpacity = isSelectedLeg ? 1 : 0.25;
                   } else if (selectedCityId !== null) {
@@ -687,7 +682,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               onSelectLeg,
               selectedCityId,
               selectedLegId,
-              showFutureLegsInTimeline,
               svgRef,
               transitModes,
               visibleModes,
@@ -731,7 +725,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                         : baseRadius;
 
                   const pinOpacity =
-                    isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
+                    isTimelineEnabled && !isVisitedInTimeline
                       ? 0.22
                       : selectedCityId &&
                           !isSelected &&
@@ -825,7 +819,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               onSelectCity,
               projectedCities,
               selectedCityId,
-              showFutureLegsInTimeline,
               svgRef,
               visitedCitiesInTimeline,
             ]
@@ -833,92 +826,74 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
 
           {/* Directional Arrowheads Layer (Rendered above pin halos so short-hop arrows are never occluded) */}
           {useMemo(
-            () => (
-              <g className="transit-arrows-layer pointer-events-none">
-                {computedLines.map(({ leg, index, line }) => {
-                  if (!visibleModes[leg.transport]) return null;
+            () =>
+              isTimelineEnabled ? null : (
+                <g className="transit-arrows-layer pointer-events-none">
+                  {computedLines.map(({ leg, line }) => {
+                    if (!visibleModes[leg.transport]) return null;
 
-                  const isPastTimeline = isTimelineEnabled && index < currentTimelineLegIndex;
-                  const isCurrentTimeline = isTimelineEnabled && index === currentTimelineLegIndex;
-                  const isFutureTimeline = isTimelineEnabled && index > currentTimelineLegIndex;
+                    const modeStyle = transitModes[leg.transport];
+                    const isSelectedLeg = selectedLegId === leg.id;
+                    const isConnectedToSelectedCity =
+                      selectedCityId !== null &&
+                      (leg.source === selectedCityId || leg.dest === selectedCityId);
+                    const isHoveredLeg = hoveredLegId === leg.id;
 
-                  if (isFutureTimeline && !showFutureLegsInTimeline) {
-                    return null;
-                  }
+                    // Arrows are hidden by default to reduce visual clutter; only show them on
+                    // legs the user is focusing on (selected, hovered, or connected to selected city)
+                    if (!isSelectedLeg && !isHoveredLeg && !isConnectedToSelectedCity) {
+                      return null;
+                    }
 
-                  const modeStyle = transitModes[leg.transport];
-                  const isSelectedLeg = selectedLegId === leg.id || isCurrentTimeline;
-                  const isConnectedToSelectedCity =
-                    selectedCityId !== null &&
-                    (leg.source === selectedCityId || leg.dest === selectedCityId);
-                  const isHoveredLeg = hoveredLegId === leg.id;
+                    let strokeOpacity = 0.88;
+                    if (selectedLegId !== null) {
+                      strokeOpacity = isSelectedLeg ? 1 : 0.28;
+                    } else if (selectedCityId !== null) {
+                      strokeOpacity = isConnectedToSelectedCity ? 0.98 : 0.25;
+                    }
 
-                  // Journey Playback relies on camera panning to convey direction, so no arrows there.
-                  if (isTimelineEnabled) {
-                    return null;
-                  }
+                    if (isHoveredLeg) strokeOpacity = Math.max(strokeOpacity, 0.95);
 
-                  // Arrows are hidden by default to reduce visual clutter; only show them on
-                  // legs the user is focusing on (selected, hovered, current timeline, or connected to selected city)
-                  if (!isSelectedLeg && !isHoveredLeg && !isConnectedToSelectedCity) {
-                    return null;
-                  }
+                    const arrowSizeMultiplier = isSelectedLeg
+                      ? 1.3
+                      : isConnectedToSelectedCity || isHoveredLeg
+                        ? 1.12
+                        : 0.92;
 
-                  let strokeOpacity = 0.88;
-                  if (isTimelineEnabled) {
-                    if (isCurrentTimeline) strokeOpacity = 1;
-                    else if (isPastTimeline) strokeOpacity = 0.78;
-                    else if (isFutureTimeline) strokeOpacity = 0.18;
-                  } else if (selectedLegId !== null) {
-                    strokeOpacity = isSelectedLeg ? 1 : 0.28;
-                  } else if (selectedCityId !== null) {
-                    strokeOpacity = isConnectedToSelectedCity ? 0.98 : 0.25;
-                  }
-
-                  if (isHoveredLeg) strokeOpacity = Math.max(strokeOpacity, 0.95);
-
-                  const arrowSizeMultiplier = isSelectedLeg
-                    ? 1.3
-                    : isConnectedToSelectedCity || isHoveredLeg
-                      ? 1.12
-                      : 0.92;
-
-                  return (
-                    <g key={`arrow-${leg.id}`}>
-                      {line.segments.map((seg, segIdx) => {
-                        // Never shrink arrowheads below 72% of invScale so short-hop arrows remain clearly visible
-                        const arrowScale = Math.max(
-                          invScale * 0.72,
-                          Math.min(invScale, seg.length / (7.5 * arrowSizeMultiplier))
-                        );
-                        const segArrowPath = buildArrowheadPath(arrowScale, arrowSizeMultiplier);
-                        return (
-                          <path
-                            key={segIdx}
-                            d={segArrowPath}
-                            fill={modeStyle.color}
-                            fillOpacity={Math.min(1, strokeOpacity + 0.12)}
-                            stroke="#060913"
-                            strokeWidth={0.85 * arrowScale}
-                            paintOrder="stroke"
-                            transform={`translate(${seg.arrowX}, ${seg.arrowY}) rotate(${seg.arrowAngleDeg})`}
-                          />
-                        );
-                      })}
-                    </g>
-                  );
-                })}
-              </g>
-            ),
+                    return (
+                      <g key={`arrow-${leg.id}`}>
+                        {line.segments.map((seg, segIdx) => {
+                          // Never shrink arrowheads below 72% of invScale so short-hop arrows remain clearly visible
+                          const arrowScale = Math.max(
+                            invScale * 0.72,
+                            Math.min(invScale, seg.length / (7.5 * arrowSizeMultiplier))
+                          );
+                          const segArrowPath = buildArrowheadPath(arrowScale, arrowSizeMultiplier);
+                          return (
+                            <path
+                              key={segIdx}
+                              d={segArrowPath}
+                              fill={modeStyle.color}
+                              fillOpacity={Math.min(1, strokeOpacity + 0.12)}
+                              stroke="#060913"
+                              strokeWidth={0.85 * arrowScale}
+                              paintOrder="stroke"
+                              transform={`translate(${seg.arrowX}, ${seg.arrowY}) rotate(${seg.arrowAngleDeg})`}
+                            />
+                          );
+                        })}
+                      </g>
+                    );
+                  })}
+                </g>
+              ),
             [
               computedLines,
-              currentTimelineLegIndex,
               hoveredLegId,
               invScale,
               isTimelineEnabled,
               selectedCityId,
               selectedLegId,
-              showFutureLegsInTimeline,
               transitModes,
               visibleModes,
             ]
@@ -948,7 +923,7 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                   if (!shouldShowLabel || !labelPlacement) return null;
 
                   const labelOpacity =
-                    isTimelineEnabled && !isVisitedInTimeline && !showFutureLegsInTimeline
+                    isTimelineEnabled && !isVisitedInTimeline
                       ? 0.22
                       : selectedCityId &&
                           !isSelected &&
@@ -998,7 +973,6 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
               labelScaleBoost,
               projectedCities,
               selectedCityId,
-              showFutureLegsInTimeline,
               showLabels,
               smartLabelPlacements,
               visitedCitiesInTimeline,

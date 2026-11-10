@@ -3,11 +3,8 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
-  Eye,
-  Navigation,
   Pause,
   Play,
-  RotateCcw,
 } from 'lucide-react';
 import {
   CityConfig,
@@ -19,8 +16,6 @@ import {
 interface JourneyPlaybackProps {
   isEnabled: boolean;
   isPlaying: boolean;
-  autoFollowCamera: boolean;
-  showFutureLegs: boolean;
   currentIndex: number;
   itinerary: ItineraryLegConfig[];
   cities: Record<string, CityConfig>;
@@ -30,10 +25,7 @@ interface JourneyPlaybackProps {
   onTogglePlay: () => void;
   onPrev: () => void;
   onNext: () => void;
-  onReset: () => void;
   onScrub: (index: number) => void;
-  onToggleAutoFollow: (follow: boolean) => void;
-  onToggleShowFutureLegs: (show: boolean) => void;
   onChangeSpeed: (ms: number) => void;
   onInspectCity: (cityId: string) => void;
 }
@@ -41,8 +33,6 @@ interface JourneyPlaybackProps {
 export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
   isEnabled,
   isPlaying,
-  autoFollowCamera,
-  showFutureLegs,
   currentIndex,
   itinerary,
   cities,
@@ -52,10 +42,7 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
   onTogglePlay,
   onPrev,
   onNext,
-  onReset,
   onScrub,
-  onToggleAutoFollow,
-  onToggleShowFutureLegs,
   onChangeSpeed,
   onInspectCity,
 }) => {
@@ -67,7 +54,7 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
 
   return (
     <div className="pointer-events-auto w-full max-w-3xl rounded-2xl border border-slate-800/95 bg-slate-900/90 px-4 py-2.5 shadow-2xl backdrop-blur-md transition-all">
-      {/* Top Row: Opt-in Checkbox + Follow Camera Toggle (when enabled) */}
+      {/* Top Row: Opt-in Checkbox + Speed Selector (when enabled) */}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <label className="flex cursor-pointer items-center gap-2.5 text-xs font-medium text-slate-200 select-none">
           <input
@@ -81,36 +68,6 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
 
         {isEnabled && (
           <div className="flex flex-wrap items-center gap-3 text-xs">
-            {/* Follow Camera Checkbox (Enabled by default per prompt.md Section 4) */}
-            <label
-              title="Smoothly pan and zoom the camera to each destination city as playback advances"
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-sky-500/30 bg-sky-500/10 px-2.5 py-1 text-xs font-medium text-sky-300 select-none"
-            >
-              <input
-                type="checkbox"
-                checked={autoFollowCamera}
-                onChange={(e) => onToggleAutoFollow(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-sky-500/40 bg-slate-900 text-sky-400 accent-sky-400 cursor-pointer"
-              />
-              <Navigation className="h-3 w-3" />
-              <span>Follow Camera</span>
-            </label>
-
-            {/* Ghost Future Legs Toggle */}
-            <label
-              title="Show upcoming legs faintly on the map"
-              className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-slate-700/80 bg-slate-800/60 px-2.5 py-1 text-xs text-slate-300 select-none"
-            >
-              <input
-                type="checkbox"
-                checked={showFutureLegs}
-                onChange={(e) => onToggleShowFutureLegs(e.target.checked)}
-                className="h-3.5 w-3.5 rounded border-slate-600 bg-slate-900 text-sky-400 accent-sky-400 cursor-pointer"
-              />
-              <Eye className="h-3 w-3 text-slate-400" />
-              <span className="hidden sm:inline">Ghost Future</span>
-            </label>
-
             {/* Playback Speed Selector */}
             <div className="flex items-center rounded-lg border border-slate-800 bg-slate-950/60 p-0.5 font-mono text-[10px]">
               {[
@@ -142,10 +99,6 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
           {/* Active Leg Metadata Banner */}
           <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-slate-950/75 border border-slate-800/90 px-3 py-2">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-md bg-sky-500/20 border border-sky-500/30 px-2 py-0.5 font-mono text-xs font-semibold text-sky-300">
-                Leg #{currentLeg.id} / {totalLegs}
-              </span>
-
               {modeStyle && (
                 <span
                   className="rounded-md px-2 py-0.5 text-xs font-semibold"
@@ -194,14 +147,6 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
           {/* Playback Buttons + Range Slider */}
           <div className="flex items-center gap-2.5">
             <div className="flex items-center gap-1">
-              <button
-                type="button"
-                onClick={onReset}
-                title="Restart at Leg #1"
-                className="rounded-lg border border-slate-800 bg-slate-800/70 p-1.5 text-slate-300 hover:bg-slate-700 hover:text-white transition"
-              >
-                <RotateCcw className="h-3.5 w-3.5" />
-              </button>
               <button
                 type="button"
                 onClick={onPrev}
