@@ -342,7 +342,7 @@ export const App: React.FC = () => {
     (cityId: string) => {
       const city = resolvedCities[cityId];
       if (!city) return;
-      const isShimanami = ['Onomichi', 'Setoda', 'Omishima', 'Imabari'].includes(cityId);
+      const isShimanami = ['Onomichi', 'Setoda', 'Omishima', 'Imabari', 'Matsuyama'].includes(cityId);
       flyToCoordinates(city.coordinates, isShimanami ? shimanamiClusterZoom : 7.5, 750);
     },
     [resolvedCities, flyToCoordinates, shimanamiClusterZoom]

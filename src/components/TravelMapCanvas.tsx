@@ -11,6 +11,7 @@ import {
   TransitModeStyleConfig,
 } from '../config/types';
 import { scaleStrokeDasharray } from '../config/transit.config';
+import { SETO_INLAND_ISLANDS } from '../config/setoInlandIslands.config';
 import {
   buildArrowheadPath,
   computeDirectionalTransitLine,
@@ -143,6 +144,16 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
       }))
       .filter((item) => Boolean(item.d));
   }, [indexedAdmin1, pathGenerator, showAdmin1]);
+
+  const setoIslandPaths = useMemo(() => {
+    return SETO_INLAND_ISLANDS.features
+      .map((item) => ({
+        id: item.id as string,
+        name: (item.properties?.name as string) || 'Island',
+        d: pathGenerator(item) || '',
+      }))
+      .filter((item) => Boolean(item.d));
+  }, [pathGenerator]);
 
   // Precompute projected coordinates for all cities
   const projectedCities = useMemo(() => {
@@ -345,6 +356,20 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
     visitedCitiesInTimeline,
   ]);
 
+  const isJapanVisited = useMemo(() => {
+    return (
+      visitedCountryFeatureIds.has('392') ||
+      Array.from(visitedCountryFeatureIds).some((id) => id.toLowerCase().includes('japan'))
+    );
+  }, [visitedCountryFeatureIds]);
+
+  const isJapanActive = useMemo(() => {
+    return (
+      activeCountryFeatureIds.has('392') ||
+      Array.from(activeCountryFeatureIds).some((id) => id.toLowerCase().includes('japan'))
+    );
+  }, [activeCountryFeatureIds]);
+
   const handleBackgroundClick = (e: React.MouseEvent<SVGSVGElement>) => {
     if (e.target === e.currentTarget || (e.target as SVGElement).dataset.bg === 'true') {
       onClearSelection();
@@ -495,6 +520,41 @@ export const TravelMapCanvas: React.FC<TravelMapCanvasProps> = React.memo(({
                 </g>
               ) : null,
             [activeAdmin1FeatureIds, admin1Paths, showAdmin1, visitedAdmin1FeatureIds]
+          )}
+
+          {/* Seto Inland Sea Islands Layer (Onomichi -> Setoda -> Omishima -> Imabari -> Matsuyama corridor) */}
+          {useMemo(
+            () => (
+              <g className="seto-islands-layer">
+                {setoIslandPaths.map((island) => (
+                  <path
+                    key={island.id}
+                    d={island.d}
+                    fill={
+                      isJapanActive
+                        ? '#203e66'
+                        : isJapanVisited
+                          ? '#183052'
+                          : '#111b2e'
+                    }
+                    stroke={
+                      isJapanActive
+                        ? '#38bdf8'
+                        : isJapanVisited
+                          ? '#2b5485'
+                          : '#26354d'
+                    }
+                    strokeWidth={isJapanActive ? 1.25 : isJapanVisited ? 0.95 : 0.7}
+                    vectorEffect="non-scaling-stroke"
+                    strokeLinejoin="round"
+                    data-bg="true"
+                  >
+                    <title>{island.name}</title>
+                  </path>
+                ))}
+              </g>
+            ),
+            [isJapanActive, isJapanVisited, setoIslandPaths]
           )}
 
           {/* Graticule Grid (Rendered above land/admin1 polygons so lat/lon lines remain visible across continents) */}
