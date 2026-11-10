@@ -1,4 +1,4 @@
-# Garden Leave Odyssey — Interactive 2D Travel Map (2026–2027)
+# Garden Leave — Interactive 2D Travel Map (2026–2027)
 
 An interactive, config-driven 2D vector travel map built with **React + TypeScript (Vite) + D3.js (`d3-geo`, `d3-zoom`) + Tailwind CSS + `lucide-react`**.
 

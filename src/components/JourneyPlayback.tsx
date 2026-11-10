@@ -77,11 +77,6 @@ export const JourneyPlayback: React.FC<JourneyPlaybackProps> = ({
             className="h-4 w-4 rounded border-slate-600 bg-slate-800 text-sky-500 focus:ring-sky-500/40 cursor-pointer accent-sky-500"
           />
           <span>Journey Playback</span>
-          {!isEnabled && (
-            <span className="hidden sm:inline rounded-md bg-slate-800 px-2 py-0.5 font-mono text-[10px] text-slate-400">
-              All {totalLegs} legs visible
-            </span>
-          )}
         </label>
 
         {isEnabled && (
