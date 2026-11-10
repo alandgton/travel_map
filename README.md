@@ -15,6 +15,19 @@ To build for Cloudflare Pages (`dist/` static output):
 npm run build
 ```
 
+## Multi-Page Site Layout (alanton.at)
+
+Vite builds several HTML entries (`rollupOptions.input` in `vite.config.ts`), each served from its own subpath on Cloudflare Pages:
+
+| Entry HTML | React entry | URL |
+|---|---|---|
+| `index.html` | `src/sites/landing/main.tsx` | `/` |
+| `home/index.html` | `src/sites/home/main.tsx` | `/home/` |
+| `work/index.html` | `src/sites/work/main.tsx` | `/work/` |
+| `gardenleave/index.html` | `src/main.tsx` (travel map) | `/gardenleave/` |
+
+To add a new subpath site: create `<name>/index.html` and `src/sites/<name>/main.tsx`, register it in `vite.config.ts` (`rollupOptions.input`) and `tailwind.config.js` (`content`), and add a link to `SITE_LINKS` in `src/sites/landing/LandingPage.tsx`.
+
 ## Project Structure & Abstractions
 
 - `src/config/types.ts` — Core TypeScript interfaces (`TravelMapConfig`, `CityConfig`, `ItineraryLegConfig`, `RegionCameraConfig`, `TransitModeStyleConfig`, `MapRenderConfig`).
